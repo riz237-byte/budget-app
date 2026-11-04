@@ -61,7 +61,7 @@ export default {
         const body = await request.json();
         if (!Array.isArray(body.budgets)) return json_({ error: 'Invalid category budget request.' }, 400, cors);
         action = 'saveCategoryBudgets';
-        gasRequest = { action, secret: env.API_SECRET, anno: body.anno, mese: body.mese, budgets: body.budgets };
+        gasRequest = { action, secret: env.API_SECRET, anno: body.anno, mese: body.mese, total: body.total, budgets: body.budgets };
       } catch (error) {
         return json_({ error: 'Invalid category budget request.' }, 400, cors);
       }
