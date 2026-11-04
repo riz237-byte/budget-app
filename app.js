@@ -180,13 +180,12 @@ function renderHomeBudget(data) {
 }
 
 function renderHomeOverview(data) {
-  const totals = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
+  const currentMovements = movementsForMonth(data.movimenti || [], year, month);
   const previousDate = new Date(year, month - 1, 1);
   const initialBalance = exactBalance(data.saldi, previousDate.getFullYear(), previousDate.getMonth() + 1);
   const finalBalance = exactBalance(data.saldi, year, month + 1);
   const initial = totalBalance(initialBalance);
   const final = totalBalance(finalBalance);
-  const currentMovements = movementsForMonth(data.movimenti || [], year, month);
   const externalIncome = currentMovements.filter((item) => item.tipo === 'Entrata' && item.categoria !== 'Investimenti')
     .reduce((sum, item) => sum + (Number(item.importo) || 0), 0);
   const externalExpenses = currentMovements.filter((item) => item.tipo === 'Uscita' && item.categoria !== 'Investimenti')
@@ -206,10 +205,14 @@ function renderHomeOverview(data) {
   $('expected-wealth-note').textContent = expected === null
     ? 'Serve il saldo finale del mese precedente'
     : `${euro(externalIncome)} entrate − ${euro(externalExpenses)} uscite`;
-  $('home-income').textContent = euro(totals.income);
-  $('home-expense').textContent = euro(totals.expense);
-  $('home-net').textContent = euro(totals.net);
-  $('home-net').className = totals.net >= 0 ? 'positive' : 'negative';
+  const difference = final === null || expected === null ? null : final - expected;
+  $('wealth-difference').textContent = difference === null ? '—' : `${difference > 0 ? '+' : ''}${euro(difference)}`;
+  $('wealth-difference').className = difference === null ? '' : difference >= 0 ? 'positive' : 'negative';
+  const net = externalIncome - externalExpenses;
+  $('home-income').textContent = euro(externalIncome);
+  $('home-expense').textContent = euro(externalExpenses);
+  $('home-net').textContent = euro(net);
+  $('home-net').className = net >= 0 ? 'positive' : 'negative';
 }
 
 function renderCategoryBudgetEditor(data, rows) {
