@@ -6,7 +6,6 @@ const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno'
 const now = new Date();
 let year = now.getFullYear();
 let month = now.getMonth();
-let activeView = 'home';
 let dashboardData = null;
 let editingMovement = null;
 
@@ -28,10 +27,13 @@ function movementMonthKey(item) {
   return itemYear === null || itemMonth === null ? null : itemYear * 12 + itemMonth + 1;
 }
 
-function selectedBalance(saldi) {
-  const requested = year * 12 + month + 1;
-  return (saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) <= requested)
+function selectedBalance(saldi, targetKey = year * 12 + month + 1) {
+  return (saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) <= targetKey)
     .sort((a, b) => balanceMonthKey(b) - balanceMonthKey(a))[0] || null;
+}
+
+function exactBalance(saldi, targetYear = year, targetMonth = month + 1) {
+  return (saldi || []).find((item) => Number(item.anno) === targetYear && Number(item.mese) === targetMonth) || null;
 }
 
 function investmentFlows(movements, minKey, maxKey) {
@@ -51,56 +53,6 @@ function totalBalance(balance) {
   return parts.every((value) => value !== null) ? parts.reduce((sum, value) => sum + value, 0) : null;
 }
 
-function renderWealth(data) {
-  const balance = selectedBalance(data.saldi);
-  $('balance-period').textContent = balance
-    ? `Ultimo saldo inserito: ${monthNames[Number(balance.mese) - 1]} ${balance.anno}`
-    : 'Nessun saldo registrato';
-  $('total-balance').textContent = maybeEuro(totalBalance(balance));
-  $('account-balance').textContent = maybeEuro(balance ? numberOrNull(balance.contoFinale) : null);
-  $('cash-balance').textContent = maybeEuro(balance ? numberOrNull(balance.contantiFinali) : null);
-  $('investment-balance').textContent = maybeEuro(balance ? numberOrNull(balance.investimentiFinali) : null);
-
-  if (!balance) {
-    ['investment-period', 'investment-opening', 'investment-closing', 'invested-capital', 'monthly-gain', 'total-gain', 'monthly-deposits', 'monthly-withdrawals']
-      .forEach((id) => { $(id).textContent = '—'; });
-    return;
-  }
-
-  const referenceKey = balanceMonthKey(balance);
-  const investmentMonths = (data.saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) <= referenceKey)
-    .sort((a, b) => balanceMonthKey(a) - balanceMonthKey(b));
-  const firstMonth = investmentMonths[0];
-  const firstKey = balanceMonthKey(firstMonth);
-  const opening = numberOrNull(balance.investimentiInizioMese);
-  const closing = numberOrNull(balance.investimentiFinali);
-  const monthFlows = investmentFlows(data.movimenti, referenceKey, referenceKey);
-  const allFlows = investmentFlows(data.movimenti, firstKey, referenceKey);
-  const initialCapital = numberOrNull(firstMonth.investimentiInizioMese);
-  const investedCapital = initialCapital === null ? null : initialCapital + allFlows.deposits - allFlows.withdrawals;
-  const monthlyGain = opening !== null && closing !== null
-    ? closing - opening - monthFlows.deposits + monthFlows.withdrawals : null;
-  const totalGain = closing !== null && investedCapital !== null ? closing - investedCapital : null;
-
-  $('investment-period').textContent = `${monthNames[Number(balance.mese) - 1]} ${balance.anno}`;
-  $('investment-opening').textContent = maybeEuro(opening);
-  $('investment-closing').textContent = maybeEuro(closing);
-  $('invested-capital').textContent = maybeEuro(investedCapital);
-  $('monthly-gain').textContent = maybeEuro(monthlyGain);
-  $('total-gain').textContent = maybeEuro(totalGain);
-  $('monthly-deposits').textContent = euro(monthFlows.deposits);
-  $('monthly-withdrawals').textContent = euro(monthFlows.withdrawals);
-  $('monthly-gain').className = monthlyGain === null ? '' : monthlyGain >= 0 ? 'positive' : 'negative';
-  $('total-gain').className = totalGain === null ? '' : totalGain >= 0 ? 'positive' : 'negative';
-}
-
-function budgetForMonth(budgets, targetYear, targetMonth) {
-  const target = targetYear * 12 + targetMonth;
-  const rows = (budgets || []).filter((item) => Number(item.anno) * 12 + Number(item.mese) - 1 <= target)
-    .sort((a, b) => (Number(b.anno) * 12 + Number(b.mese)) - (Number(a.anno) * 12 + Number(a.mese)));
-  return rows.length ? Number(rows[0].budget) : 360;
-}
-
 function movementsForMonth(movements, targetYear, targetMonth) {
   return (movements || []).filter((item) => Number(item.anno) === targetYear && Number(item.mese) === targetMonth);
 }
@@ -110,12 +62,169 @@ function monthlyTotals(movements) {
     .reduce((sum, item) => sum + (Number(item.importo) || 0), 0);
   const expense = movements.filter((item) => item.tipo === 'Uscita' && item.categoria !== 'Investimenti')
     .reduce((sum, item) => sum + (Number(item.importo) || 0), 0);
-  return { income, expense };
+  return { income, expense, net: income - expense };
+}
+
+function budgetForMonth(budgets, targetYear, targetMonth) {
+  const target = targetYear * 12 + targetMonth;
+  const rows = (budgets || []).filter((item) => Number(item.anno) * 12 + Number(item.mese) - 1 <= target)
+    .sort((a, b) => (Number(b.anno) * 12 + Number(b.mese)) - (Number(a.anno) * 12 + Number(a.mese)));
+  return rows.length ? Number(rows[0].budget) : 360;
+}
+
+function categoryBudgetRows(data, targetYear, targetMonth) {
+  const categories = new Set();
+  (data.movimenti || []).forEach((item) => {
+    if (item.tipo === 'Uscita' && item.categoria && item.categoria !== 'Investimenti') categories.add(item.categoria);
+  });
+  (data.categoryBudgets || []).forEach((item) => { if (item.categoria) categories.add(item.categoria); });
+  const spent = new Map();
+  movementsForMonth(data.movimenti || [], targetYear, targetMonth)
+    .filter((item) => item.tipo === 'Uscita' && item.categoria !== 'Investimenti')
+    .forEach((item) => spent.set(item.categoria, (spent.get(item.categoria) || 0) + (Number(item.importo) || 0)));
+  const targetKey = targetYear * 12 + targetMonth + 1;
+  return [...categories].sort((a, b) => a.localeCompare(b, 'it')).map((category) => {
+    const saved = (data.categoryBudgets || []).filter((item) => item.categoria === category &&
+      Number(item.anno) * 12 + Number(item.mese) <= targetKey)
+      .sort((a, b) => (Number(b.anno) * 12 + Number(b.mese)) - (Number(a.anno) * 12 + Number(a.mese)))[0];
+    return { category, spent: spent.get(category) || 0, budget: saved ? Number(saved.budget) : null };
+  });
+}
+
+function categoryBudgetSummary(data, targetYear, targetMonth) {
+  const rows = categoryBudgetRows(data, targetYear, targetMonth);
+  const configured = rows.some((row) => row.budget !== null);
+  return {
+    rows,
+    configured,
+    total: configured ? rows.reduce((sum, row) => sum + (row.budget || 0), 0) : budgetForMonth(data.budgets, targetYear, targetMonth),
+  };
+}
+
+function renderWealth(data) {
+  const requestedKey = year * 12 + month + 1;
+  const balance = selectedBalance(data.saldi, requestedKey);
+  $('balance-period').textContent = balance
+    ? `Ultimo saldo inserito: ${monthNames[Number(balance.mese) - 1]} ${balance.anno}`
+    : 'Nessun saldo registrato';
+  $('total-balance').textContent = maybeEuro(totalBalance(balance));
+  $('account-balance').textContent = maybeEuro(balance ? numberOrNull(balance.contoFinale) : null);
+  $('cash-balance').textContent = maybeEuro(balance ? numberOrNull(balance.contantiFinali) : null);
+  $('investment-balance').textContent = maybeEuro(balance ? numberOrNull(balance.investimentiFinali) : null);
+
+  if (!balance) {
+    ['investment-period', 'investment-opening', 'investment-closing', 'invested-capital', 'monthly-gain', 'total-gain', 'monthly-withdrawals']
+      .forEach((id) => { $(id).textContent = '—'; });
+    return;
+  }
+
+  const referenceKey = balanceMonthKey(balance);
+  const opening = numberOrNull(balance.investimentiInizioMese);
+  const closing = numberOrNull(balance.investimentiFinali);
+  const monthFlows = investmentFlows(data.movimenti, referenceKey, referenceKey);
+  const allFlows = investmentFlows(data.movimenti, Number.MIN_SAFE_INTEGER, referenceKey);
+  const investedCapital = allFlows.deposits - allFlows.withdrawals;
+  const monthlyGain = opening !== null && closing !== null
+    ? closing - opening - monthFlows.deposits + monthFlows.withdrawals : null;
+  const totalGain = closing !== null ? closing - investedCapital : null;
+
+  $('investment-period').textContent = `${monthNames[Number(balance.mese) - 1]} ${balance.anno}`;
+  $('investment-opening').textContent = maybeEuro(opening);
+  $('investment-closing').textContent = maybeEuro(closing);
+  $('invested-capital').textContent = euro(investedCapital);
+  $('monthly-gain').textContent = maybeEuro(monthlyGain);
+  $('total-gain').textContent = maybeEuro(totalGain);
+  $('monthly-withdrawals').textContent = euro(monthFlows.withdrawals);
+  $('monthly-gain').className = monthlyGain === null ? '' : monthlyGain >= 0 ? 'positive' : 'negative';
+  $('total-gain').className = totalGain === null ? '' : totalGain >= 0 ? 'positive' : 'negative';
+}
+
+function renderHomeBudget(data) {
+  const current = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
+  const summary = categoryBudgetSummary(data, year, month);
+  $('home-budget-total').textContent = euro(summary.total);
+  $('home-budget-spent').textContent = euro(current.expense);
+  $('home-budget-remaining').textContent = euro(summary.total - current.expense);
+  const list = $('home-category-budgets');
+  list.replaceChildren();
+  summary.rows.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'home-category-row';
+    const name = document.createElement('span');
+    name.className = 'home-category-name';
+    name.textContent = item.category;
+    const progress = document.createElement('span');
+    progress.className = 'category-progress';
+    const fill = document.createElement('span');
+    fill.style.width = item.budget > 0 ? `${Math.min(100, item.spent / item.budget * 100)}%` : '0%';
+    if (item.budget !== null && item.spent > item.budget) fill.classList.add('over-budget');
+    progress.append(fill);
+    const spent = document.createElement('span');
+    spent.className = 'category-spent';
+    spent.textContent = `${euro(item.spent)} / ${item.budget === null ? '—' : euro(item.budget)}`;
+    const remaining = document.createElement('span');
+    remaining.className = `category-remaining ${item.budget !== null && item.budget - item.spent < 0 ? 'negative' : ''}`;
+    remaining.textContent = item.budget === null ? 'Da impostare' : `Restano ${euro(item.budget - item.spent)}`;
+    row.append(name, progress, spent, remaining);
+    list.append(row);
+  });
+}
+
+function renderHomeOverview(data) {
+  const totals = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
+  const targetKey = year * 12 + month + 1;
+  const previous = (data.saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) < targetKey)
+    .sort((a, b) => balanceMonthKey(b) - balanceMonthKey(a))[0];
+  const expected = totalBalance(previous);
+  $('home-income').textContent = euro(totals.income);
+  $('home-expense').textContent = euro(totals.expense);
+  $('home-net').textContent = euro(totals.net);
+  $('home-net').className = totals.net >= 0 ? 'positive' : 'negative';
+  $('expected-wealth').textContent = expected === null ? '—' : euro(expected + totals.net);
+}
+
+function renderCategoryBudgetEditor(data, rows) {
+  const editor = $('category-budget-editor');
+  editor.replaceChildren();
+  rows.forEach((item) => {
+    const row = document.createElement('label');
+    row.className = 'category-editor-row';
+    const details = document.createElement('span');
+    details.className = 'category-editor-details';
+    const name = document.createElement('span');
+    name.textContent = item.category;
+    const spent = document.createElement('small');
+    spent.textContent = `Speso questo mese: ${euro(item.spent)}`;
+    details.append(name, spent);
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.step = '0.01';
+    input.inputMode = 'decimal';
+    input.placeholder = '0,00';
+    input.value = item.budget === null ? '' : item.budget;
+    input.dataset.category = item.category;
+    input.setAttribute('aria-label', `Budget mensile per ${item.category}`);
+    input.addEventListener('input', updateCategoryBudgetTotal);
+    row.append(details, input);
+    editor.append(row);
+  });
+  $('category-budget-status').textContent = rows.length
+    ? 'I valori salvati si applicano ai mesi successivi finché non li modifichi.'
+    : 'Non ci sono categorie di uscita da impostare.';
+  updateCategoryBudgetTotal();
+}
+
+function updateCategoryBudgetTotal() {
+  const total = [...document.querySelectorAll('#category-budget-editor input')]
+    .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+  $('category-budget-total').textContent = euro(total);
 }
 
 function renderMonthly(data) {
-  const totals = monthlyTotals(movementsForMonth(data.movimenti, year, month));
-  const budget = budgetForMonth(data.budgets, year, month);
+  const totals = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
+  const summary = categoryBudgetSummary(data, year, month);
+  const budget = summary.total;
   $('remaining').textContent = euro(budget - totals.expense);
   $('remaining-note').textContent = budget >= totals.expense ? 'Disponibilità residua del budget' : 'Hai superato il budget';
   $('budget').textContent = euro(budget);
@@ -123,13 +232,14 @@ function renderMonthly(data) {
   $('budget-progress').style.width = `${Math.min(100, budget ? totals.expense / budget * 100 : 0)}%`;
   $('income').textContent = euro(totals.income);
   $('expense').textContent = euro(totals.expense);
+  renderCategoryBudgetEditor(data, summary.rows);
 }
 
 function renderAnnual(data) {
   const rows = monthNames.map((label, index) => {
-    const totals = monthlyTotals(movementsForMonth(data.movimenti, year, index));
-    const budget = budgetForMonth(data.budgets, year, index);
-    return { label, ...totals, budget, net: totals.income - totals.expense };
+    const totals = monthlyTotals(movementsForMonth(data.movimenti || [], year, index));
+    const budget = categoryBudgetSummary(data, year, index).total;
+    return { label, ...totals, budget };
   });
   $('annual-year').textContent = year;
   $('annual-income').textContent = euro(rows.reduce((sum, row) => sum + row.income, 0));
@@ -156,18 +266,12 @@ function formatDay(isoDate) {
     .format(new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00`));
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[char]);
-}
-
 function renderMovements(movements) {
   const list = $('movement-list');
   list.replaceChildren();
   const sorted = movements.slice().sort((a, b) => b.timestamp - a.timestamp);
   if (!sorted.length) {
-    list.className = 'empty';
+    list.className = 'movement-days empty';
     list.textContent = 'Nessun movimento in questo mese.';
     return;
   }
@@ -180,11 +284,20 @@ function renderMovements(movements) {
   });
   groups.forEach((items, day) => {
     const group = document.createElement('section');
-    group.className = 'day-group';
+    group.className = 'day-group panel';
     const heading = document.createElement('h3');
     heading.className = 'day-heading';
     heading.textContent = `${formatDay(day)} · ${items.length}`;
     group.append(heading);
+    const columns = document.createElement('div');
+    columns.className = 'table-head movement-columns';
+    ['Descrizione', 'Categoria', 'Importo', ''].forEach((label, index) => {
+      const cell = document.createElement('span');
+      cell.textContent = label;
+      if (index === 2) cell.className = 'amount';
+      columns.append(cell);
+    });
+    group.append(columns);
     items.forEach((item) => {
       const row = document.createElement('div');
       row.className = 'movement-row';
@@ -219,6 +332,8 @@ function render(data) {
   $('period').textContent = `${monthNames[month]} ${year}`;
   $('movement-period').textContent = `${monthNames[month]} ${year}`;
   renderWealth(data);
+  renderHomeBudget(data);
+  renderHomeOverview(data);
   renderMonthly(data);
   renderAnnual(data);
   renderMovements(movementsForMonth(data.movimenti || [], year, month));
@@ -227,7 +342,6 @@ function render(data) {
 }
 
 function setView(view) {
-  activeView = view;
   document.querySelectorAll('.view').forEach((section) => { section.hidden = section.id !== `${view}-view`; });
   document.querySelectorAll('.bottom-nav [data-view]').forEach((link) => link.classList.toggle('active', link.dataset.view === view));
   $('page-menu').hidden = true;
@@ -236,7 +350,7 @@ function setView(view) {
   $('year-controls').hidden = view !== 'annual';
   if (view === 'home') {
     $('view-kicker').textContent = 'PATRIMONIO';
-    $('view-title').innerHTML = 'Il tuo denaro,<br><span>sotto controllo.</span>';
+    $('view-title').textContent = 'Panoramica';
   } else if (view === 'monthly') {
     $('view-kicker').textContent = 'BUDGET MENSILE';
     $('view-title').textContent = 'Budget mensile';
@@ -287,9 +401,7 @@ async function saveEdit(event) {
   };
   try {
     const response = await fetch(`${API_BASE}/api/movimenti/edit`, {
-      method: 'POST',
-      credentials: 'include',
-      cache: 'no-store',
+      method: 'POST', credentials: 'include', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: editingMovement.id, changes }),
     });
@@ -303,6 +415,71 @@ async function saveEdit(event) {
     $('edit-error').hidden = false;
   } finally {
     saveButton.disabled = false;
+  }
+}
+
+function openBalanceForm() {
+  const current = exactBalance(dashboardData.saldi);
+  const previous = selectedBalance(dashboardData.saldi, year * 12 + month);
+  $('balance-form-period').textContent = `${monthNames[month].toUpperCase()} ${year}`;
+  $('balance-account').value = current?.contoFinale ?? previous?.contoFinale ?? '';
+  $('balance-cash').value = current?.contantiFinali ?? previous?.contantiFinali ?? '';
+  $('balance-investments').value = current?.investimentiFinali ?? previous?.investimentiFinali ?? '';
+  $('balance-error').hidden = true;
+  $('balance-dialog').showModal();
+}
+
+async function saveBalance(event) {
+  event.preventDefault();
+  const button = $('save-balance');
+  button.disabled = true;
+  $('balance-error').hidden = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/saldi/save`, {
+      method: 'POST', credentials: 'include', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anno: year, mese: month + 1,
+        contoFinale: Number($('balance-account').value),
+        contantiFinali: Number($('balance-cash').value),
+        investimentiFinali: Number($('balance-investments').value),
+      }),
+    });
+    if (!response.ok) throw new Error('save failed');
+    const result = await response.json();
+    if (!result.ok) throw new Error('save failed');
+    $('balance-dialog').close();
+    await load();
+  } catch (error) {
+    $('balance-error').textContent = 'Saldo non salvato. Controlla l’accesso e riprova.';
+    $('balance-error').hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveCategoryBudgets() {
+  const button = $('save-category-budgets');
+  const inputs = [...document.querySelectorAll('#category-budget-editor input')];
+  button.disabled = true;
+  $('category-budget-status').textContent = 'Salvataggio…';
+  try {
+    const budgets = inputs.map((input) => ({ categoria: input.dataset.category, budget: Number(input.value) || 0 }));
+    const response = await fetch(`${API_BASE}/api/budgets/categories`, {
+      method: 'POST', credentials: 'include', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anno: year, mese: month + 1, budgets }),
+    });
+    if (!response.ok) throw new Error('save failed');
+    const result = await response.json();
+    if (!result.ok) throw new Error('save failed');
+    dashboardData.categoryBudgets = result.categoryBudgets;
+    render(dashboardData);
+    $('category-budget-status').textContent = 'Budget per categoria salvati.';
+  } catch (error) {
+    $('category-budget-status').textContent = 'Budget non salvati. Controlla l’accesso e riprova.';
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -341,6 +518,11 @@ $('next-year').addEventListener('click', () => { year++; updatePeriod(); });
 $('edit-form').addEventListener('submit', saveEdit);
 $('close-edit').addEventListener('click', () => $('edit-dialog').close());
 $('cancel-edit').addEventListener('click', () => $('edit-dialog').close());
+$('add-balance').addEventListener('click', openBalanceForm);
+$('balance-form').addEventListener('submit', saveBalance);
+$('close-balance').addEventListener('click', () => $('balance-dialog').close());
+$('cancel-balance').addEventListener('click', () => $('balance-dialog').close());
+$('save-category-budgets').addEventListener('click', saveCategoryBudgets);
 document.addEventListener('click', (event) => {
   if (!$('page-menu').hidden && !event.target.closest('.menu-wrap')) {
     $('page-menu').hidden = true;
@@ -349,4 +531,3 @@ document.addEventListener('click', (event) => {
 });
 updatePeriod();
 load();
-
