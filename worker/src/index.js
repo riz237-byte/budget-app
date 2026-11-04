@@ -40,8 +40,33 @@ export default {
       } catch (error) {
         return json_({ error: 'Invalid edit request.' }, 400, cors);
       }
+    } else if (url.pathname === '/api/saldi/save' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        action = 'saveBalance';
+        gasRequest = {
+          action,
+          secret: env.API_SECRET,
+          anno: body.anno,
+          mese: body.mese,
+          contoFinale: body.contoFinale,
+          contantiFinali: body.contantiFinali,
+          investimentiFinali: body.investimentiFinali,
+        };
+      } catch (error) {
+        return json_({ error: 'Invalid balance request.' }, 400, cors);
+      }
+    } else if (url.pathname === '/api/budgets/categories' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        if (!Array.isArray(body.budgets)) return json_({ error: 'Invalid category budget request.' }, 400, cors);
+        action = 'saveCategoryBudgets';
+        gasRequest = { action, secret: env.API_SECRET, anno: body.anno, mese: body.mese, budgets: body.budgets };
+      } catch (error) {
+        return json_({ error: 'Invalid category budget request.' }, 400, cors);
+      }
     } else if (url.pathname.startsWith('/api/')) {
-      return json_({ error: 'Method not allowed.' }, 405, { ...cors, allow: 'GET /api/bootstrap, POST /api/movimenti/edit, OPTIONS' });
+      return json_({ error: 'Method not allowed.' }, 405, { ...cors, allow: 'GET /api/bootstrap, POST /api/movimenti/edit, POST /api/saldi/save, POST /api/budgets/categories, OPTIONS' });
     } else {
       return json_({ error: 'Not found.' }, 404, cors);
     }
@@ -58,7 +83,8 @@ export default {
         return json_({ error: 'Unable to complete the request.' }, 502, cors);
       }
       if (action === 'bootstrap' &&
-          (!Array.isArray(payload.movimenti) || !Array.isArray(payload.budgets) || !Array.isArray(payload.saldi))) {
+          (!Array.isArray(payload.movimenti) || !Array.isArray(payload.budgets) ||
+           !Array.isArray(payload.saldi) || !Array.isArray(payload.categoryBudgets))) {
         return json_({ error: 'Invalid bootstrap response.' }, 502, cors);
       }
       return json_(payload, 200, cors);
@@ -74,4 +100,3 @@ function json_(payload, status, cors) {
     headers: { ...RESPONSE_HEADERS, ...cors },
   });
 }
-
