@@ -72,22 +72,31 @@ function budgetForMonth(budgets, targetYear, targetMonth) {
   return rows.length ? Number(rows[0].budget) : 360;
 }
 
+const DEFAULT_BUDGET_SPLIT = [
+  { category: 'Investimenti', percentage: 45, matches: ['Investimenti'], investment: true },
+  { category: 'Spese fisse', percentage: 16.2, matches: ['Abbonamenti'] },
+  { category: 'Cibo', percentage: 19.4, matches: ['Cibo'] },
+  { category: 'Trasporti', percentage: 5, matches: ['Trasporti'] },
+  { category: 'Shopping / svago', percentage: 8.3, matches: ['Shopping', 'Intrattenimento', 'Collezionismo', 'Regali'] },
+  { category: 'Imprevisti / altro', percentage: 6, matches: ['Altro', 'Salute', 'Viaggi', 'Tecnologia', 'Ricariche/commissioni'] },
+];
+
 function categoryBudgetRows(data, targetYear, targetMonth) {
-  const categories = new Set();
-  (data.movimenti || []).forEach((item) => {
-    if (item.tipo === 'Uscita' && item.categoria && item.categoria !== 'Investimenti') categories.add(item.categoria);
-  });
-  (data.categoryBudgets || []).forEach((item) => { if (item.categoria) categories.add(item.categoria); });
-  const spent = new Map();
-  movementsForMonth(data.movimenti || [], targetYear, targetMonth)
-    .filter((item) => item.tipo === 'Uscita' && item.categoria !== 'Investimenti')
-    .forEach((item) => spent.set(item.categoria, (spent.get(item.categoria) || 0) + (Number(item.importo) || 0)));
   const targetKey = targetYear * 12 + targetMonth + 1;
-  return [...categories].sort((a, b) => a.localeCompare(b, 'it')).map((category) => {
-    const saved = (data.categoryBudgets || []).filter((item) => item.categoria === category &&
+  const total = budgetForMonth(data.budgets, targetYear, targetMonth);
+  const monthMovements = movementsForMonth(data.movimenti || [], targetYear, targetMonth);
+  return DEFAULT_BUDGET_SPLIT.map((definition) => {
+    const saved = (data.categoryBudgets || []).filter((item) => item.categoria === definition.category &&
       Number(item.anno) * 12 + Number(item.mese) <= targetKey)
       .sort((a, b) => (Number(b.anno) * 12 + Number(b.mese)) - (Number(a.anno) * 12 + Number(a.mese)))[0];
-    return { category, spent: spent.get(category) || 0, budget: saved ? Number(saved.budget) : null };
+    const percentage = saved && numberOrNull(saved.percentuale) !== null
+      ? Number(saved.percentuale) : definition.percentage;
+    const budget = saved && numberOrNull(saved.budget) !== null
+      ? Number(saved.budget) : Math.round(total * percentage) / 100;
+    const spent = monthMovements.filter((item) => definition.matches.includes(item.categoria) &&
+      (definition.investment ? item.tipo === 'Uscita' : item.tipo === 'Uscita'))
+      .reduce((sum, item) => sum + (Number(item.importo) || 0), 0);
+    return { category: definition.category, spent, budget, percentage };
   });
 }
 
@@ -97,7 +106,7 @@ function categoryBudgetSummary(data, targetYear, targetMonth) {
   return {
     rows,
     configured,
-    total: configured ? rows.reduce((sum, row) => sum + (row.budget || 0), 0) : budgetForMonth(data.budgets, targetYear, targetMonth),
+    total: budgetForMonth(data.budgets, targetYear, targetMonth),
   };
 }
 
@@ -140,11 +149,11 @@ function renderWealth(data) {
 }
 
 function renderHomeBudget(data) {
-  const current = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
   const summary = categoryBudgetSummary(data, year, month);
+  const spent = summary.rows.reduce((sum, row) => sum + row.spent, 0);
   $('home-budget-total').textContent = euro(summary.total);
-  $('home-budget-spent').textContent = euro(current.expense);
-  $('home-budget-remaining').textContent = euro(summary.total - current.expense);
+  $('home-budget-spent').textContent = euro(spent);
+  $('home-budget-remaining').textContent = euro(summary.total - spent);
   const list = $('home-category-budgets');
   list.replaceChildren();
   summary.rows.forEach((item) => {
@@ -184,6 +193,8 @@ function renderHomeOverview(data) {
 }
 
 function renderCategoryBudgetEditor(data, rows) {
+  const totalInput = $('monthly-budget-total-input');
+  if (document.activeElement !== totalInput) totalInput.value = budgetForMonth(data.budgets, year, month).toFixed(2);
   const editor = $('category-budget-editor');
   editor.replaceChildren();
   rows.forEach((item) => {
@@ -196,40 +207,72 @@ function renderCategoryBudgetEditor(data, rows) {
     const spent = document.createElement('small');
     spent.textContent = `Speso questo mese: ${euro(item.spent)}`;
     details.append(name, spent);
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.min = '0';
-    input.step = '0.01';
-    input.inputMode = 'decimal';
-    input.placeholder = '0,00';
-    input.value = item.budget === null ? '' : item.budget;
-    input.dataset.category = item.category;
-    input.setAttribute('aria-label', `Budget mensile per ${item.category}`);
-    input.addEventListener('input', updateCategoryBudgetTotal);
-    row.append(details, input);
+    const percentage = document.createElement('input');
+    percentage.type = 'number';
+    percentage.min = '0';
+    percentage.step = '0.1';
+    percentage.inputMode = 'decimal';
+    percentage.value = item.percentage.toFixed(1);
+    percentage.dataset.category = item.category;
+    percentage.dataset.field = 'percentage';
+    percentage.setAttribute('aria-label', `Percentuale budget per ${item.category}`);
+    percentage.addEventListener('input', () => updateBudgetRow(percentage));
+    const amount = document.createElement('input');
+    amount.type = 'number';
+    amount.min = '0';
+    amount.step = '0.01';
+    amount.inputMode = 'decimal';
+    amount.value = item.budget.toFixed(2);
+    amount.dataset.category = item.category;
+    amount.dataset.field = 'budget';
+    amount.setAttribute('aria-label', `Importo budget per ${item.category}`);
+    amount.addEventListener('input', () => updateBudgetRow(amount));
+    row.append(details, percentage, amount);
     editor.append(row);
   });
-  $('category-budget-status').textContent = rows.length
-    ? 'I valori salvati si applicano ai mesi successivi finché non li modifichi.'
-    : 'Non ci sono categorie di uscita da impostare.';
+  $('category-budget-status').textContent = 'Le percentuali sono calcolate sul totale mensile. Le spese fisse includono la categoria Abbonamenti.';
+  updateCategoryBudgetTotal();
+}
+
+function updateBudgetRow(changedInput) {
+  const category = changedInput.dataset.category;
+  const row = changedInput.closest('.category-editor-row');
+  const percentage = row.querySelector('[data-field="percentage"]');
+  const amount = row.querySelector('[data-field="budget"]');
+  const total = Number($('monthly-budget-total-input').value) || 0;
+  if (changedInput.dataset.field === 'percentage') amount.value = (total * (Number(percentage.value) || 0) / 100).toFixed(2);
+  else percentage.value = total ? ((Number(amount.value) || 0) / total * 100).toFixed(2) : '0';
+  updateCategoryBudgetTotal();
+}
+
+function updateBudgetValuesFromPercentages() {
+  const total = Number($('monthly-budget-total-input').value) || 0;
+  document.querySelectorAll('#category-budget-editor .category-editor-row').forEach((row) => {
+    const percentage = row.querySelector('[data-field="percentage"]');
+    const amount = row.querySelector('[data-field="budget"]');
+    amount.value = (total * (Number(percentage.value) || 0) / 100).toFixed(2);
+  });
   updateCategoryBudgetTotal();
 }
 
 function updateCategoryBudgetTotal() {
-  const total = [...document.querySelectorAll('#category-budget-editor input')]
+  const amount = [...document.querySelectorAll('#category-budget-editor [data-field="budget"]')]
     .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
-  $('category-budget-total').textContent = euro(total);
+  const percentage = [...document.querySelectorAll('#category-budget-editor [data-field="percentage"]')]
+    .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+  $('category-budget-total').textContent = `${euro(amount)} · ${percentage.toFixed(1)}%`;
 }
 
 function renderMonthly(data) {
   const totals = monthlyTotals(movementsForMonth(data.movimenti || [], year, month));
   const summary = categoryBudgetSummary(data, year, month);
   const budget = summary.total;
-  $('remaining').textContent = euro(budget - totals.expense);
-  $('remaining-note').textContent = budget >= totals.expense ? 'Disponibilità residua del budget' : 'Hai superato il budget';
+  const budgetSpent = summary.rows.reduce((sum, row) => sum + row.spent, 0);
+  $('remaining').textContent = euro(budget - budgetSpent);
+  $('remaining-note').textContent = budget >= budgetSpent ? 'Disponibilità residua del budget' : 'Hai superato il budget';
   $('budget').textContent = euro(budget);
-  $('spent').textContent = euro(totals.expense);
-  $('budget-progress').style.width = `${Math.min(100, budget ? totals.expense / budget * 100 : 0)}%`;
+  $('spent').textContent = euro(budgetSpent);
+  $('budget-progress').style.width = `${Math.min(100, budget ? budgetSpent / budget * 100 : 0)}%`;
   $('income').textContent = euro(totals.income);
   $('expense').textContent = euro(totals.expense);
   renderCategoryBudgetEditor(data, summary.rows);
@@ -460,20 +503,26 @@ async function saveBalance(event) {
 
 async function saveCategoryBudgets() {
   const button = $('save-category-budgets');
-  const inputs = [...document.querySelectorAll('#category-budget-editor input')];
+  const rows = [...document.querySelectorAll('#category-budget-editor .category-editor-row')];
   button.disabled = true;
   $('category-budget-status').textContent = 'Salvataggio…';
   try {
-    const budgets = inputs.map((input) => ({ categoria: input.dataset.category, budget: Number(input.value) || 0 }));
+    const budgets = rows.map((row) => ({
+      categoria: row.querySelector('[data-field="budget"]').dataset.category,
+      budget: Number(row.querySelector('[data-field="budget"]').value) || 0,
+      percentuale: Number(row.querySelector('[data-field="percentage"]').value) || 0,
+    }));
+    const total = Number($('monthly-budget-total-input').value);
     const response = await fetch(`${API_BASE}/api/budgets/categories`, {
       method: 'POST', credentials: 'include', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ anno: year, mese: month + 1, budgets }),
+      body: JSON.stringify({ anno: year, mese: month + 1, total, budgets }),
     });
     if (!response.ok) throw new Error('save failed');
     const result = await response.json();
     if (!result.ok) throw new Error('save failed');
     dashboardData.categoryBudgets = result.categoryBudgets;
+    dashboardData.budgets = result.budgets;
     render(dashboardData);
     $('category-budget-status').textContent = 'Budget per categoria salvati.';
   } catch (error) {
@@ -523,6 +572,7 @@ $('balance-form').addEventListener('submit', saveBalance);
 $('close-balance').addEventListener('click', () => $('balance-dialog').close());
 $('cancel-balance').addEventListener('click', () => $('balance-dialog').close());
 $('save-category-budgets').addEventListener('click', saveCategoryBudgets);
+$('monthly-budget-total-input').addEventListener('input', updateBudgetValuesFromPercentages);
 document.addEventListener('click', (event) => {
   if (!$('page-menu').hidden && !event.target.closest('.menu-wrap')) {
     $('page-menu').hidden = true;
