@@ -1,25 +1,8 @@
 # Budget App
 
-Personal finance app built as a static web app for GitHub Pages.
+Dashboard personale in sola lettura, pubblicato con GitHub Pages e collegato a Google Sheets attraverso Cloudflare Worker e Google Apps Script.
 
-## Architecture
+Il bootstrap legge soltanto i fogli esistenti `Movimenti`, `BudgetMensili` e `SaldiMensili`. Non esegue inizializzazioni, migrazioni, importazioni, reset o scritture. Il repository non contiene ID del foglio, segreti o dati finanziari.
 
-- **Frontend:** React + Vite, hosted on GitHub Pages.
-- **API gateway:** Cloudflare Worker. It keeps the Google Apps Script secret off the public frontend and handles browser CORS.
-- **Database:** the existing Google Sheet. The API reads and writes the existing sheets; it does not run migrations or reset data.
+Prima di collegare il foglio, proteggi il Worker con Cloudflare Access: la restrizione CORS non è un controllo di accesso. La procedura completa è in [docs/SETUP.md](docs/SETUP.md).
 
-## Data safety
-
-The application expects these existing sheets:
-
-- `Movimenti`: Data, Tipo, Descrizione, Importo, Conto, Categoria
-- `SaldiMensili`: Anno, Mese, Conto iniziale, Contanti iniziali, Investimenti inizio mese, Conto finale, Contanti finali, Investimenti fine mese
-- `BudgetMensili` (optional): Anno, Mese, Budget mensile
-
-The bootstrap/read operation is read-only. It does not create sheets, rewrite headers, import historical data, or change investment balances. The only writes happen after an explicit user action in the app.
-
-## Setup status
-
-This repository contains the new application scaffold. The live Google Sheet is not connected yet. Do not add spreadsheet IDs, API secrets, passwords, or personal financial data to this repository.
-
-See `docs/SETUP.md` for the setup sequence.
