@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-11-04"
 
 [vars]
-# Set these in Cloudflare Worker settings; these values contain no credentials.
-GAS_URL = ""
-ALLOWED_ORIGIN = ""
+# Public URLs only. Keys, email and migration secrets stay in Cloudflare settings.
+ALLOWED_ORIGIN = "https://riz237-byte.github.io"
+APP_URL = "https://riz237-byte.github.io/budget-app/"
 
