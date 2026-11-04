@@ -64,6 +64,9 @@ export default {
       if (url.pathname === '/api/bootstrap' && request.method === 'GET') {
         return json_(await bootstrap_(env, user), 200, cors);
       }
+      if (url.pathname === '/api/movimenti/add' && request.method === 'POST') {
+        return await addMovement_(request, env, user, cors);
+      }
       if (url.pathname === '/api/movimenti/edit' && request.method === 'POST') {
         return await editMovement_(request, env, user, cors);
       }
@@ -202,6 +205,20 @@ async function migrateFromSheet_(env, user, cors) {
   await upsertRows_(env, user, 'category_budgets', rows.category_budgets, 'user_id,year,month,category');
   await upsertRows_(env, user, 'migration_state', [{ user_id: user.id, counts }], 'user_id');
   return json_({ ok: true, complete: true, counts }, 200, cors);
+}
+
+async function addMovement_(request, env, user, cors) {
+  const body = await readJson_(request);
+  const valid = validateMovement_(body.changes || {});
+  if (!valid) return json_({ error: 'Valori del movimento non validi.' }, 400, cors);
+  const id = crypto.randomUUID();
+  const row = { user_id: user.id, id, date: valid.date, year: valid.year, month: valid.month,
+    type: valid.type, description: valid.description, amount: valid.amount, category: valid.category };
+  const result = await restRequest_(env, user, 'movements', {
+    method: 'POST', body: [row], prefer: 'return=minimal',
+  });
+  if (!result.response.ok) return json_({ error: 'Movimento non salvato.' }, 502, cors);
+  return json_({ ok: true, id }, 201, cors);
 }
 
 async function editMovement_(request, env, user, cors) {

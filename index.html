@@ -64,6 +64,17 @@
       </section>
 
       <section class="view" id="home-view">
+        <section class="section-head" id="wealth">
+          <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
+          <div class="wealth-actions"><span id="balance-period" class="muted balance-period">Nessun saldo</span></div>
+        </section>
+        <section class="summary-grid wealth-grid">
+          <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Conto</p><strong id="account-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Contanti</p><strong id="cash-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Investimenti</p><strong id="investment-balance">—</strong></article>
+        </section>
+
         <section class="section-head balance-summary-heading">
           <div><p class="eyebrow">SALDI DEL MESE</p></div>
           <button id="add-balance" class="secondary" type="button">Imposta</button>
@@ -81,17 +92,6 @@
           <article class="panel overview-card"><span>Entrate</span><strong id="home-income" class="positive">—</strong></article>
           <article class="panel overview-card"><span>Uscite</span><strong id="home-expense" class="negative">—</strong></article>
           <article class="panel overview-card"><span>Bilancio</span><strong id="home-net">—</strong><small>Investimenti esclusi dal bilancio</small></article>
-        </section>
-
-        <section class="section-head" id="wealth">
-          <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
-          <div class="wealth-actions"><span id="balance-period" class="muted balance-period">Nessun saldo</span></div>
-        </section>
-        <section class="summary-grid wealth-grid">
-          <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
-          <article class="panel metric"><p class="muted">Conto</p><strong id="account-balance">—</strong></article>
-          <article class="panel metric"><p class="muted">Contanti</p><strong id="cash-balance">—</strong></article>
-          <article class="panel metric"><p class="muted">Investimenti</p><strong id="investment-balance">—</strong></article>
         </section>
 
         <section class="section-head" id="home-budget">
@@ -120,6 +120,7 @@
           <div><p class="eyebrow">ATTIVITÀ · <span id="movement-period"></span></p><h2>Movimenti</h2></div>
         </section>
         <div id="movement-list" class="movement-days empty">Nessun dato caricato.</div>
+        <button id="add-movement" class="movement-fab" type="button" aria-label="Aggiungi movimento" title="Aggiungi movimento"><span aria-hidden="true">+</span></button>
       </section>
 
       <section class="view" id="monthly-view" hidden>
@@ -162,7 +163,7 @@
     </main>
     <dialog id="edit-dialog" class="edit-dialog">
       <form id="edit-form">
-        <div class="dialog-heading"><div><p class="eyebrow">MOVIMENTO</p><h2>Modifica movimento</h2></div><button id="close-edit" class="icon-button" type="button" aria-label="Chiudi">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">MOVIMENTO</p><h2 id="movement-dialog-title">Modifica movimento</h2></div><button id="close-edit" class="icon-button" type="button" aria-label="Chiudi">×</button></div>
         <label>Data<input id="edit-date" type="date" required></label>
         <label>Descrizione<input id="edit-description" type="text" maxlength="250" required></label>
         <label>Categoria<select id="edit-category" required></select></label>
