@@ -18,3 +18,5 @@
 
 .wealth-comparison-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:8px}.wealth-comparison-grid .overview-card{min-height:116px}.wealth-comparison-grid .overview-card strong{font-size:24px}.wealth-comparison-note{font-size:11px;color:var(--muted);line-height:1.4}
 @media(max-width:680px){.wealth-comparison-grid{grid-template-columns:1fr}.wealth-comparison-grid .overview-card{min-height:94px}.wealth-comparison-grid .overview-card strong{font-size:21px}}
+
+.balance-summary-panel{padding:16px}.balance-pair{grid-template-columns:1fr;gap:10px}.balance-initial-card strong{font-size:26px!important}.balance-pair .overview-card{min-height:90px}.balance-difference{font-size:12px}.balance-flow-grid{grid-template-columns:1fr 1fr}.balance-flow-grid .overview-card:last-child{grid-column:1/-1}}
