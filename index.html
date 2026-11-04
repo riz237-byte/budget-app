@@ -28,7 +28,7 @@
     </header>
     <main>
       <section class="welcome">
-        <div><p class="eyebrow" id="view-kicker">PATRIMONIO</p><h1 id="view-title">Il tuo denaro,<br><span>sotto controllo.</span></h1></div>
+        <div><p class="eyebrow" id="view-kicker">PATRIMONIO</p><h1 id="view-title">Panoramica</h1></div>
         <div class="period" id="month-controls">
           <button id="prev-month" aria-label="Mese precedente">‹</button><strong id="period"></strong><button id="next-month" aria-label="Mese successivo">›</button>
         </div>
@@ -40,13 +40,30 @@
       <section class="view" id="home-view">
         <section class="section-head" id="wealth">
           <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
-          <span id="balance-period" class="muted balance-period">Nessun saldo</span>
+          <div class="wealth-actions"><span id="balance-period" class="muted balance-period">Nessun saldo</span><button id="add-balance" class="secondary">＋ Patrimonio finale</button></div>
         </section>
         <section class="summary-grid wealth-grid">
           <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
           <article class="panel metric"><p class="muted">Conto</p><strong id="account-balance">—</strong></article>
           <article class="panel metric"><p class="muted">Contanti</p><strong id="cash-balance">—</strong></article>
           <article class="panel metric"><p class="muted">Investimenti</p><strong id="investment-balance">—</strong></article>
+        </section>
+
+        <section class="section-head" id="home-budget">
+          <div><p class="eyebrow">BUDGET DEL MESE</p><h2>Speso e ancora disponibile</h2></div>
+          <button class="text-button" type="button" data-view="monthly">Modifica budget</button>
+        </section>
+        <section class="panel home-budget-panel">
+          <div class="home-budget-total"><div><span>Disponibile</span><strong id="home-budget-remaining">—</strong></div><div><span>Speso</span><strong id="home-budget-spent">—</strong></div><div><span>Budget</span><strong id="home-budget-total">—</strong></div></div>
+          <div id="home-category-budgets" class="category-budget-list"></div>
+        </section>
+
+        <section class="section-head"><div><p class="eyebrow">RIEPILOGO</p><h2>Entrate e uscite del mese</h2></div></section>
+        <section class="overview-grid">
+          <article class="panel overview-card"><span>Patrimonio atteso</span><strong id="expected-wealth">—</strong></article>
+          <article class="panel overview-card"><span>Entrate</span><strong id="home-income" class="positive">—</strong></article>
+          <article class="panel overview-card"><span>Uscite</span><strong id="home-expense" class="negative">—</strong></article>
+          <article class="panel overview-card"><span>Bilancio</span><strong id="home-net">—</strong></article>
         </section>
 
         <section class="section-head" id="investments">
@@ -59,17 +76,13 @@
           <article class="panel investment-card"><span>Capitale investito</span><strong id="invested-capital">—</strong></article>
           <article class="panel investment-card"><span>Guadagno mensile</span><strong id="monthly-gain">—</strong></article>
           <article class="panel investment-card"><span>Guadagno totale</span><strong id="total-gain">—</strong></article>
-          <article class="panel investment-card"><span>Versamenti del mese</span><strong id="monthly-deposits">—</strong></article>
           <article class="panel investment-card"><span>Prelievi del mese</span><strong id="monthly-withdrawals">—</strong></article>
         </section>
 
         <section class="section-head" id="movements">
           <div><p class="eyebrow">ATTIVITÀ · <span id="movement-period"></span></p><h2>Movimenti</h2></div>
         </section>
-        <section class="panel movements">
-          <div class="table-head"><span>Descrizione</span><span>Categoria</span><span class="amount">Importo</span><span></span></div>
-          <div id="movement-list" class="empty">Nessun dato caricato.</div>
-        </section>
+        <div id="movement-list" class="movement-days empty">Nessun dato caricato.</div>
       </section>
 
       <section class="view" id="monthly-view" hidden>
@@ -83,6 +96,12 @@
           </article>
           <article class="panel metric"><p class="muted">Entrate</p><strong class="positive" id="income">—</strong></article>
           <article class="panel metric"><p class="muted">Uscite</p><strong class="negative" id="expense">—</strong></article>
+        </section>
+        <section class="section-head"><div><p class="eyebrow">CATEGORIE</p><h2>Budget mensile per categoria</h2></div></section>
+        <section class="panel category-editor-panel">
+          <div id="category-budget-editor" class="category-editor-list"></div>
+          <div class="category-editor-footer"><span>Totale budget categorie <strong id="category-budget-total">—</strong></span><button id="save-category-budgets" class="primary" type="button">Salva budget</button></div>
+          <p id="category-budget-status" class="muted editor-status" role="status"></p>
         </section>
       </section>
 
@@ -115,6 +134,17 @@
         <div class="dialog-actions"><button id="cancel-edit" class="secondary" type="button">Annulla</button><button id="save-edit" class="primary" type="submit">Salva</button></div>
       </form>
     </dialog>
+    <dialog id="balance-dialog" class="edit-dialog">
+      <form id="balance-form">
+        <div class="dialog-heading"><div><p class="eyebrow" id="balance-form-period">SALDO FINALE</p><h2>Patrimonio finale del mese</h2></div><button id="close-balance" class="icon-button" type="button" aria-label="Chiudi">×</button></div>
+        <label>Conto<input id="balance-account" type="number" min="0" step="0.01" required></label>
+        <label>Contanti<input id="balance-cash" type="number" min="0" step="0.01" required></label>
+        <label>Investimenti<input id="balance-investments" type="number" min="0" step="0.01" required></label>
+        <p class="muted">Il saldo iniziale sarà ripreso dal mese precedente disponibile.</p>
+        <p id="balance-error" class="form-error" hidden></p>
+        <div class="dialog-actions"><button id="cancel-balance" class="secondary" type="button">Annulla</button><button id="save-balance" class="primary" type="submit">Salva saldo</button></div>
+      </form>
+    </dialog>
     <nav class="bottom-nav">
       <a class="active" href="#wealth" data-view="home">◉ <span>Home</span></a>
       <a href="#monthly-view" data-view="monthly">€ <span>Budget</span></a>
@@ -125,4 +155,3 @@
   <script src="./app.js" type="module"></script>
 </body>
 </html>
-
