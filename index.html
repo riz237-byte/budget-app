@@ -11,7 +11,32 @@
   <title>Budget</title>
 </head>
 <body>
-  <div id="app">
+  <section id="auth-screen" class="auth-screen" hidden>
+    <form id="auth-form" class="auth-card">
+      <a class="brand" href="./"><span class="brand-mark">€</span>Budget</a>
+      <p class="eyebrow" id="auth-eyebrow">ACCESSO</p>
+      <h1 id="auth-title">Accedi</h1>
+      <p id="auth-description" class="muted">Accedi al tuo spazio personale.</p>
+      <label>Email<input id="auth-email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required></label>
+      <label id="setup-key-wrap" hidden>Codice di configurazione<input id="setup-key" type="password" autocomplete="off"></label>
+      <p id="auth-error" class="form-error" role="alert" hidden></p>
+      <button id="auth-submit" class="primary" type="submit">Accedi</button>
+    </form>
+  </section>
+  <section id="migration-screen" class="auth-screen" hidden>
+    <div class="auth-card">
+      <a class="brand" href="./"><span class="brand-mark">€</span>Budget</a>
+      <p class="eyebrow">TRASFERIMENTO DATI</p>
+      <h1>I tuoi dati, su Supabase</h1>
+      <p class="muted">Copierò movimenti, budget e saldi dal foglio Google nel tuo database privato. Il foglio originale non verrà modificato.</p>
+      <p class="muted">La copia parte solo quando premi il pulsante. Al termine controlleremo quanti record sono stati trasferiti.</p>
+      <p id="migration-error" class="form-error" role="alert" hidden></p>
+      <button id="migration-start" class="primary" type="button">Copia i miei dati</button>
+      <button id="migration-logout" class="secondary" type="button">Esci</button>
+    </div>
+  </section>
+  <div id="app" hidden>
     <header class="topbar">
       <a class="brand" href="./"><span class="brand-mark">€</span>Budget</a>
       <div class="header-actions">
@@ -22,6 +47,7 @@
             <button type="button" data-view="home">Home</button>
             <button type="button" data-view="monthly">Budget mensile</button>
             <button type="button" data-view="annual">Riepilogo annuale</button>
+            <button type="button" id="logout-button">Esci</button>
           </nav>
         </div>
       </div>
@@ -167,3 +193,4 @@
   <script src="./app.js" type="module"></script>
 </body>
 </html>
+
