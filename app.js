@@ -8,6 +8,139 @@ let year = now.getFullYear();
 let month = now.getMonth();
 let dashboardData = null;
 let editingMovement = null;
+let authToken = sessionStorage.getItem('budget-auth-token') || '';
+let setupMode = false;
+
+function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+  return fetch(`${API_BASE}${path}`, { ...options, headers, cache: 'no-store' }).then((response) => {
+    if (response.status === 401) {
+      authToken = '';
+      sessionStorage.removeItem('budget-auth-token');
+      showAuth(false);
+    }
+    return response;
+  });
+}
+
+function showAuth(setupRequired) {
+  setupMode = Boolean(setupRequired);
+  $('app').hidden = true;
+  $('migration-screen').hidden = true;
+  $('auth-screen').hidden = false;
+  $('auth-eyebrow').textContent = setupMode ? 'CONFIGURAZIONE INIZIALE' : 'ACCESSO';
+  $('auth-title').textContent = setupMode ? 'Crea il tuo accesso' : 'Accedi';
+  $('auth-description').textContent = setupMode
+    ? 'Usa la tua email e scegli una password di almeno 12 caratteri.'
+    : 'Accedi al tuo spazio personale.';
+  $('auth-submit').textContent = setupMode ? 'Crea account' : 'Accedi';
+  $('auth-password').autocomplete = setupMode ? 'new-password' : 'current-password';
+  $('setup-key-wrap').hidden = !setupMode;
+  $('setup-key').required = setupMode;
+  $('auth-error').hidden = true;
+}
+
+async function startAuthentication() {
+  if (!API_BASE) {
+    showAuth(false);
+    $('auth-error').textContent = 'Backend non configurato. Completa le impostazioni Cloudflare.';
+    $('auth-error').hidden = false;
+    return;
+  }
+  try {
+    const statusResponse = await fetch(`${API_BASE}/api/auth/status`, { cache: 'no-store' });
+    if (!statusResponse.ok) throw new Error('status unavailable');
+    const status = await statusResponse.json();
+    if (status.setupRequired) {
+      showAuth(true);
+      return;
+    }
+    if (!authToken) {
+      showAuth(false);
+      return;
+    }
+    await openAuthenticatedApp();
+  } catch (error) {
+    showAuth(false);
+    $('auth-error').textContent = 'Servizio non raggiungibile. Riprova tra poco.';
+    $('auth-error').hidden = false;
+  }
+}
+
+async function openAuthenticatedApp() {
+  const response = await apiFetch('/api/migration/status');
+  if (!response.ok) throw new Error('migration status unavailable');
+  const migration = await response.json();
+  $('auth-screen').hidden = true;
+  if (!migration.complete) {
+    $('app').hidden = true;
+    $('migration-screen').hidden = false;
+    return;
+  }
+  $('migration-screen').hidden = true;
+  $('app').hidden = false;
+  await load();
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  const button = $('auth-submit');
+  button.disabled = true;
+  $('auth-error').hidden = true;
+  const body = { email: $('auth-email').value.trim(), password: $('auth-password').value };
+  const headers = { 'Content-Type': 'application/json' };
+  if (setupMode) headers['X-Setup-Key'] = $('setup-key').value;
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/${setupMode ? 'setup' : 'login'}`, {
+      method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store',
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok || !result.token) throw new Error(result.error || 'Accesso non riuscito.');
+    authToken = result.token;
+    sessionStorage.setItem('budget-auth-token', authToken);
+    $('auth-password').value = '';
+    $('setup-key').value = '';
+    await openAuthenticatedApp();
+  } catch (error) {
+    $('auth-error').textContent = error.message || 'Accesso non riuscito. Controlla i dati e riprova.';
+    $('auth-error').hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function logout() {
+  try { if (authToken) await apiFetch('/api/auth/logout', { method: 'POST' }); } catch (error) { /* Expired sessions are cleared locally. */ }
+  authToken = '';
+  sessionStorage.removeItem('budget-auth-token');
+  dashboardData = null;
+  $('migration-screen').hidden = true;
+  showAuth(false);
+}
+
+async function runMigration() {
+  const button = $('migration-start');
+  button.disabled = true;
+  button.textContent = 'Copia in corso…';
+  $('migration-error').hidden = true;
+  try {
+    const response = await apiFetch('/api/migration/import', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok || !result.ok || !result.complete) throw new Error(result.error || 'Copia non completata.');
+    $('migration-screen').hidden = true;
+    $('app').hidden = false;
+    await load();
+    const counts = result.counts || {};
+    $('notice').textContent = `Copia completata: ${Number(counts.movimenti) || 0} movimenti, ${Number(counts.saldi) || 0} saldi e ${Number(counts.budgets) || 0} budget trasferiti.`;
+  } catch (error) {
+    $('migration-error').textContent = error.message || 'Copia non riuscita. Riprova o chiedi assistenza.';
+    $('migration-error').hidden = false;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Copia i miei dati';
+  }
+}
 
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -404,7 +537,7 @@ function render(data) {
   renderAnnual(data);
   renderMovements(movementsForMonth(data.movimenti || [], year, month));
   $('connection').textContent = 'Collegato';
-  $('notice').textContent = 'Dati caricati dal tuo Google Sheet.';
+  $('notice').textContent = 'Dati caricati dal database Cloudflare.';
 }
 
 function setView(view) {
@@ -466,8 +599,8 @@ async function saveEdit(event) {
     importo: Number($('edit-amount').value),
   };
   try {
-    const response = await fetch(`${API_BASE}/api/movimenti/edit`, {
-      method: 'POST', credentials: 'include', cache: 'no-store',
+    const response = await apiFetch('/api/movimenti/edit', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: editingMovement.id, changes }),
     });
@@ -501,8 +634,8 @@ async function saveBalance(event) {
   button.disabled = true;
   $('balance-error').hidden = true;
   try {
-    const response = await fetch(`${API_BASE}/api/saldi/save`, {
-      method: 'POST', credentials: 'include', cache: 'no-store',
+    const response = await apiFetch('/api/saldi/save', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         anno: year, mese: month + 1,
@@ -536,8 +669,8 @@ async function saveCategoryBudgets() {
       percentuale: Number(row.querySelector('[data-field="percentage"]').value) || 0,
     }));
     const total = Number($('monthly-budget-total-input').value);
-    const response = await fetch(`${API_BASE}/api/budgets/categories`, {
-      method: 'POST', credentials: 'include', cache: 'no-store',
+    const response = await apiFetch('/api/budgets/categories', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ anno: year, mese: month + 1, total, budgets }),
     });
@@ -557,12 +690,12 @@ async function saveCategoryBudgets() {
 
 async function load() {
   if (!API_BASE) {
-    $('notice').textContent = 'Backend non configurato. Segui docs/SETUP.md per collegare Google Sheets.';
+    $('notice').textContent = 'Backend non configurato. Segui docs/SETUP.md per collegare Cloudflare.';
     return;
   }
   $('connection').textContent = 'Connessione…';
   try {
-    const response = await fetch(`${API_BASE}/api/bootstrap`, { credentials: 'include', cache: 'no-store' });
+    const response = await apiFetch('/api/bootstrap');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     render(await response.json());
   } catch (error) {
@@ -596,6 +729,10 @@ $('close-balance').addEventListener('click', () => $('balance-dialog').close());
 $('cancel-balance').addEventListener('click', () => $('balance-dialog').close());
 $('save-category-budgets').addEventListener('click', saveCategoryBudgets);
 $('monthly-budget-total-input').addEventListener('input', updateBudgetValuesFromPercentages);
+ $('auth-form').addEventListener('submit', submitAuth);
+ $('logout-button').addEventListener('click', logout);
+$('migration-start').addEventListener('click', runMigration);
+$('migration-logout').addEventListener('click', logout);
 document.addEventListener('click', (event) => {
   if (!$('page-menu').hidden && !event.target.closest('.menu-wrap')) {
     $('page-menu').hidden = true;
@@ -603,4 +740,5 @@ document.addEventListener('click', (event) => {
   }
 });
 updatePeriod();
-load();
+startAuthentication();
+

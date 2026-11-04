@@ -1,39 +1,42 @@
-# Configurazione e uso
+# Cloudflare: database, accesso e passaggio dei dati
 
-Il backend legge i fogli già esistenti e non esegue inizializzazioni, importazioni, migrazioni o reset all'avvio. Scrive solo dopo un'azione esplicita nell'app: modifica di un movimento, salvataggio del patrimonio finale o salvataggio dei budget per categoria. La scheda `BudgetCategorie` viene creata solo al primo salvataggio dei budget per categoria.
+L'app usa GitHub Pages per la pagina e Cloudflare Worker + D1 per il servizio e i dati. L'accesso è con email e password. Il foglio Google viene letto una sola volta durante la migrazione e resta intatto come copia di sicurezza.
 
-## Aggiornare Apps Script
+## Preparare D1
 
-1. Apri il progetto Apps Script collegato al nuovo foglio e sostituisci `Code.gs` con `apps-script/Code.gs`.
-2. Mantieni le Script Properties private `SPREADSHEET_ID` e `API_SECRET` già configurate.
-3. Salva. Vai in **Deploy → Manage deployments**, modifica la Web App esistente, seleziona **New version** e fai deploy. Se Google richiede autorizzazioni aggiuntive per modificare il foglio, esaminale e autorizza.
+1. In Cloudflare apri **Workers & Pages → D1 SQL Database → Create database** e crea `budget-app-db`.
+2. Copia il **Database ID** mostrato da Cloudflare. È un identificativo, non una password.
+3. Nel progetto sostituisci `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID` in `worker/wrangler.toml` con quel valore.
+4. Apri la Console SQL del database e applica tutto il contenuto di `worker/migrations/0001_initial.sql` una volta sola.
 
-## Aggiornare Cloudflare Worker
+## Collegare il Worker
 
-1. Apri il Worker `budget-app-api`, scegli **Edit code** e sostituisci il codice con `worker/src/index.js`.
-2. In **Settings → Variables and Secrets** verifica che `GAS_URL` punti all'URL `/exec` Apps Script, `ALLOWED_ORIGIN` sia `https://riz237-byte.github.io` e `API_SECRET` sia il secret già configurato.
-3. Distribuisci il Worker. Mantieni Cloudflare Access attivo solo per gli utenti autorizzati e mantieni il bypass delle richieste `OPTIONS`; il codice Worker risponde con CORS per l'origine esatta.
+Nel Worker `budget-app-api`, aggiungi il binding D1 con nome `DB` e scegli `budget-app-db`. Imposta queste variabili in **Settings → Variables and Secrets**:
 
-Il Worker espone `GET /api/bootstrap`, `POST /api/movimenti/edit`, `POST /api/saldi/save` e `POST /api/budgets/categories`. I tre percorsi POST sono chiamati solo dai rispettivi pulsanti **Salva** nell'app. I saldi modificano o aggiungono la riga del mese selezionato in `SaldiMensili`; il primo saldo inserito parte da valori iniziali pari a zero. I budget usano `BudgetMensili` per il totale mensile e la scheda `BudgetCategorie` per categoria, percentuale e importo. Il conto dei movimenti non è mostrato né modificabile.
+- `ALLOWED_ORIGIN`: `https://riz237-byte.github.io`.
+- `OWNER_EMAIL` come **secret**: il tuo indirizzo email di accesso.
+- `INITIAL_SETUP_KEY` come **secret**: una stringa casuale lunga almeno 32 caratteri. La userai una sola volta per creare l'accesso iniziale.
+- Mantieni temporaneamente le variabili/secret esistenti `GAS_URL` e `API_SECRET`: servono solo a leggere il foglio per la migrazione.
 
-## Pubblicare l'interfaccia
+Pubblica `worker/src/index.js` e verifica che il Worker riceva il binding `DB`. Se Cloudflare Access è attivo su questo Worker, disattivalo: il nuovo login dell'app protegge già le richieste e Access intercetterebbe la schermata di accesso.
 
-Le modifiche in `index.html`, `app.js` e `styles.css` si pubblicano con GitHub Pages dalla branch `main` e cartella `/(root)`. `config.js` deve contenere solo l'URL pubblico del Worker, mai ID o segreti.
+## Creare l'accesso e trasferire i dati
 
-## Calcoli
+1. Apri `https://riz237-byte.github.io/budget-app/` e inserisci l'indirizzo email autorizzato, la password scelta (almeno 12 caratteri) e `INITIAL_SETUP_KEY`.
+2. L'app mostra il trasferimento dal foglio. Premi **Copia i miei dati**: il Worker legge i movimenti, i budget, i saldi e i budget per categoria già presenti e li copia in D1. Nessun dato viene scritto o cancellato nel foglio.
+3. Verifica la dashboard, il totale dei movimenti e gli ultimi saldi. Il trasferimento è registrato come completato e non viene ripetuto automaticamente.
+4. Dopo la verifica, elimina `GAS_URL` e `API_SECRET` dai segreti/variabili del Worker. Da quel momento il Worker non dipende più da Google Sheets.
 
-- Patrimonio e totale usano l'ultimo saldo mensile disponibile fino al mese visualizzato, usando i valori finali inseriti nell'app o nel foglio. Il patrimonio atteso parte dal patrimonio finale del mese precedente e aggiunge entrate meno uscite del mese.
-- I versamenti sono movimenti `Uscita` con categoria `Investimenti`; i prelievi sono `Entrata` con categoria `Investimenti`.
-- Il capitale investito cumulativo è la somma dei versamenti (uscite con categoria `Investimenti`) meno i prelievi (entrate con la stessa categoria). Il guadagno mensile è fine mese meno inizio mese, meno versamenti, più prelievi. Il guadagno totale è fine mese meno capitale investito cumulativo.
-- Il piano iniziale da 360 € ripartisce il budget in Investimenti 45%, Spese fisse 16,2%, Cibo 19,4%, Trasporti 5%, Shopping / svago 8,3% e Imprevisti / altro 6%. Le percentuali sono arrotondate e sommano al 99,9%. Spese fisse viene associato agli Abbonamenti.
-- Nella pagina **Budget mensile** si possono modificare il totale, la percentuale e l'importo di ciascuna voce. Cambiare percentuale ricalcola l'importo; cambiare importo ricalcola la percentuale; cambiare il totale ricalcola gli importi. Il salvataggio applica i valori da quel mese in avanti fino alla modifica successiva. La home mostra speso, disponibile e budget per ciascuna voce.
-- Budget mensile e riepilogo annuale escludono i movimenti di categoria `Investimenti` dalle uscite di budget.
+La password viene derivata con PBKDF2 e non è salvata in chiaro. Le sessioni durano 30 giorni e il token è conservato nella sessione della scheda del browser; chiudendo la scheda può essere necessario accedere di nuovo. Non mettere password o chiavi segrete in `config.js`, nel repository o nei messaggi.
 
-## Verifica manuale
+## Distribuzione
 
-1. Accedi al Worker in Brave e ricarica la pagina Budget.
-2. Verifica che patrimonio, dettaglio investimenti e movimenti siano coerenti con il mese di saldo mostrato.
-3. Prova il menu **Budget mensile** e **Riepilogo annuale**.
-4. Per aggiornare il patrimonio, scegli il mese, premi **Patrimonio finale**, inserisci conto, contanti e investimenti, quindi premi **Salva saldo**.
-5. Per impostare i budget, apri **Budget mensile**, compila i valori per categoria e premi **Salva budget**. La scheda `BudgetCategorie` verrà aggiunta al foglio in quel momento.
-6. Per correggere un movimento, usa l'icona di modifica nella sua riga, controlla i campi e premi **Salva**. La riga verrà aggiornata nel foglio solo dopo questa conferma.
+GitHub Pages continua a usare l'URL pubblico del Worker in `config.js`. `worker/wrangler.toml` contiene solo il binding e l'origine pubblica; `OWNER_EMAIL`, `INITIAL_SETUP_KEY`, `API_SECRET` e ogni altra chiave restano nelle impostazioni private del Worker. Non caricare file esportati dal foglio nel repository.
+
+## Verifica
+
+- Senza login, `/api/bootstrap` deve rispondere `401` e non restituire dati.
+- Dopo il login, la dashboard deve mostrare i dati importati; prova anche una modifica a un budget e ricarica la pagina.
+- `OPTIONS` deve ricevere `204` con CORS solo per l'origine GitHub Pages configurata.
+- La schermata iniziale e il trasferimento devono essere completati prima di rimuovere i vecchi segreti Google dal Worker.
+

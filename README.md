@@ -1,7 +1,8 @@
 # Budget App
 
-Dashboard personale pubblicata con GitHub Pages e collegata a Google Sheets tramite Cloudflare Worker e Apps Script.
+Dashboard personale pubblicata con GitHub Pages, protetta da login email/password e collegata a Cloudflare Worker + D1.
 
-La home mostra patrimonio, budget e spese per categoria, entrate, uscite, bilancio, andamento degli investimenti e movimenti raggruppati per giorno. Il menu include **Budget mensile** e **Riepilogo annuale**. Le modifiche al foglio avvengono solo quando l'utente salva un movimento, un patrimonio finale o i budget per categoria.
+La prima configurazione consente di copiare nel database Cloudflare i movimenti, i saldi e i budget del foglio Google. Il foglio originale resta intatto come backup. Dopo la verifica dei dati, si rimuovono dal Worker i collegamenti temporanei a Google.
 
-Il backend non esegue inizializzazioni, migrazioni, importazioni o reset. Il repository non contiene l'ID del foglio, segreti o dati finanziari. Vedi [docs/SETUP.md](docs/SETUP.md) per pubblicare gli aggiornamenti.
+Il repository contiene codice e schema del database, mai dati finanziari, password o chiavi segrete. Per configurare e migrare il progetto, segui [docs/SETUP.md](docs/SETUP.md).
+
