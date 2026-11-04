@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#080a09">
-  <meta name="description" content="Gestione personale di entrate, uscite, budget e patrimonio">
+  <meta name="description" content="Budget personale, patrimonio e investimenti">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -14,71 +14,111 @@
   <div id="app">
     <header class="topbar">
       <a class="brand" href="./"><span class="brand-mark">€</span>Budget</a>
-      <span id="connection" class="connection">Non collegato</span>
+      <div class="header-actions">
+        <span id="connection" class="connection">Non collegato</span>
+        <div class="menu-wrap">
+          <button id="menu-toggle" class="menu-toggle" aria-label="Apri menu" aria-expanded="false">☰</button>
+          <nav id="page-menu" class="page-menu" hidden>
+            <button type="button" data-view="home">Home</button>
+            <button type="button" data-view="monthly">Budget mensile</button>
+            <button type="button" data-view="annual">Riepilogo annuale</button>
+          </nav>
+        </div>
+      </div>
     </header>
     <main>
       <section class="welcome">
-        <div><p class="eyebrow">RIEPILOGO</p><h1>Il tuo denaro,<br><span>sotto controllo.</span></h1></div>
-        <div class="period"><button id="prev-month" aria-label="Mese precedente">‹</button><strong id="period"></strong><button id="next-month" aria-label="Mese successivo">›</button></div>
-      </section>
-
-      <section class="section-head" id="wealth">
-        <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
-        <span id="balance-period" class="muted balance-period">Nessun saldo</span>
-      </section>
-      <section class="summary-grid wealth-grid">
-        <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
-        <article class="panel metric"><p class="muted">Conto</p><strong id="account-balance">—</strong></article>
-        <article class="panel metric"><p class="muted">Contanti</p><strong id="cash-balance">—</strong></article>
-        <article class="panel metric"><p class="muted">Investimenti</p><strong id="investment-balance">—</strong></article>
-      </section>
-
-      <section class="section-head" id="investments">
-        <div><p class="eyebrow">INVESTIMENTI</p><h2>Andamento investimenti</h2></div>
-      </section>
-      <section class="panel investments-panel">
-        <div class="investment-totals">
-          <article><span>Inizio del mese</span><strong id="investment-opening">—</strong></article>
-          <article><span>Fine del mese</span><strong id="investment-closing">—</strong></article>
-          <article><span>Variazione</span><strong id="investment-change">—</strong></article>
+        <div><p class="eyebrow" id="view-kicker">PATRIMONIO</p><h1 id="view-title">Il tuo denaro,<br><span>sotto controllo.</span></h1></div>
+        <div class="period" id="month-controls">
+          <button id="prev-month" aria-label="Mese precedente">‹</button><strong id="period"></strong><button id="next-month" aria-label="Mese successivo">›</button>
         </div>
-        <div class="table-wrap">
-          <table class="investment-table">
-            <thead><tr><th>Mese</th><th>Inizio</th><th>Fine</th><th class="amount">Variazione</th></tr></thead>
-            <tbody id="investment-history"><tr><td colspan="4" class="empty">Nessun saldo storico disponibile.</td></tr></tbody>
-          </table>
+        <div class="period" id="year-controls" hidden>
+          <button id="prev-year" aria-label="Anno precedente">‹</button><strong id="annual-year"></strong><button id="next-year" aria-label="Anno successivo">›</button>
         </div>
       </section>
 
-      <section class="section-head monthly-head" id="stats">
-        <div><p class="eyebrow">BUDGET MENSILE</p><h2>Riepilogo del mese</h2></div>
-      </section>
-      <section class="summary-grid">
-        <article class="panel hero-card">
-          <p class="muted">Disponibilità del mese</p><strong class="big-number" id="remaining">—</strong>
-          <p class="muted" id="remaining-note">Collega il tuo foglio per iniziare</p>
-          <div class="progress"><span id="budget-progress"></span></div>
-          <div class="split"><span>Speso <b id="spent">—</b></span><span>Budget <b id="budget">—</b></span></div>
-        </article>
-        <article class="panel metric"><p class="muted">Entrate</p><strong class="positive" id="income">—</strong></article>
-        <article class="panel metric"><p class="muted">Uscite</p><strong class="negative" id="expense">—</strong></article>
+      <section class="view" id="home-view">
+        <section class="section-head" id="wealth">
+          <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
+          <span id="balance-period" class="muted balance-period">Nessun saldo</span>
+        </section>
+        <section class="summary-grid wealth-grid">
+          <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Conto</p><strong id="account-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Contanti</p><strong id="cash-balance">—</strong></article>
+          <article class="panel metric"><p class="muted">Investimenti</p><strong id="investment-balance">—</strong></article>
+        </section>
+
+        <section class="section-head" id="investments">
+          <div><p class="eyebrow">INVESTIMENTI</p><h2>Dettaglio del mese</h2></div>
+          <span id="investment-period" class="muted balance-period">—</span>
+        </section>
+        <section class="investment-grid">
+          <article class="panel investment-card"><span>Inizio mese</span><strong id="investment-opening">—</strong></article>
+          <article class="panel investment-card"><span>Fine mese</span><strong id="investment-closing">—</strong></article>
+          <article class="panel investment-card"><span>Capitale investito</span><strong id="invested-capital">—</strong></article>
+          <article class="panel investment-card"><span>Guadagno mensile</span><strong id="monthly-gain">—</strong></article>
+          <article class="panel investment-card"><span>Guadagno totale</span><strong id="total-gain">—</strong></article>
+          <article class="panel investment-card"><span>Versamenti del mese</span><strong id="monthly-deposits">—</strong></article>
+          <article class="panel investment-card"><span>Prelievi del mese</span><strong id="monthly-withdrawals">—</strong></article>
+        </section>
+
+        <section class="section-head" id="movements">
+          <div><p class="eyebrow">ATTIVITÀ · <span id="movement-period"></span></p><h2>Movimenti</h2></div>
+        </section>
+        <section class="panel movements">
+          <div class="table-head"><span>Descrizione</span><span>Categoria</span><span class="amount">Importo</span><span></span></div>
+          <div id="movement-list" class="empty">Nessun dato caricato.</div>
+        </section>
       </section>
 
-      <section class="section-head" id="movements">
-        <div><p class="eyebrow">ATTIVITÀ</p><h2>Movimenti recenti</h2></div>
-        <button id="add-movement" class="primary">＋ Aggiungi</button>
+      <section class="view" id="monthly-view" hidden>
+        <section class="section-head page-section-head"><div><p class="eyebrow">BUDGET MENSILE</p><h2>Riepilogo del mese</h2></div></section>
+        <section class="summary-grid">
+          <article class="panel hero-card">
+            <p class="muted">Disponibilità del mese</p><strong class="big-number" id="remaining">—</strong>
+            <p class="muted" id="remaining-note">Collega il tuo foglio per iniziare</p>
+            <div class="progress"><span id="budget-progress"></span></div>
+            <div class="split"><span>Speso <b id="spent">—</b></span><span>Budget <b id="budget">—</b></span></div>
+          </article>
+          <article class="panel metric"><p class="muted">Entrate</p><strong class="positive" id="income">—</strong></article>
+          <article class="panel metric"><p class="muted">Uscite</p><strong class="negative" id="expense">—</strong></article>
+        </section>
       </section>
-      <section class="panel movements">
-        <div class="table-head"><span>Descrizione</span><span>Categoria</span><span>Importo</span></div>
-        <div id="movement-list" class="empty">Nessun dato caricato.</div>
+
+      <section class="view" id="annual-view" hidden>
+        <section class="section-head page-section-head"><div><p class="eyebrow">RIEPILOGO ANNUALE</p><h2>Andamento dell’anno</h2></div></section>
+        <section class="summary-grid annual-summary">
+          <article class="panel metric"><p class="muted">Entrate dell’anno</p><strong class="positive" id="annual-income">—</strong></article>
+          <article class="panel metric"><p class="muted">Uscite dell’anno</p><strong class="negative" id="annual-expense">—</strong></article>
+          <article class="panel metric"><p class="muted">Disponibilità</p><strong id="annual-net">—</strong></article>
+        </section>
+        <section class="panel annual-panel">
+          <div class="table-wrap"><table class="annual-table">
+            <thead><tr><th>Mese</th><th>Entrate</th><th>Uscite</th><th>Budget</th><th class="amount">Disponibilità</th></tr></thead>
+            <tbody id="annual-months"></tbody>
+          </table></div>
+        </section>
       </section>
+
       <p id="notice" class="notice">Configura il backend seguendo docs/SETUP.md.</p>
     </main>
+    <dialog id="edit-dialog" class="edit-dialog">
+      <form id="edit-form">
+        <div class="dialog-heading"><div><p class="eyebrow">MOVIMENTO</p><h2>Modifica movimento</h2></div><button id="close-edit" class="icon-button" type="button" aria-label="Chiudi">×</button></div>
+        <label>Data<input id="edit-date" type="date" required></label>
+        <label>Descrizione<input id="edit-description" type="text" maxlength="250" required></label>
+        <label>Categoria<select id="edit-category" required></select></label>
+        <label>Tipo<select id="edit-type" required><option>Uscita</option><option>Entrata</option></select></label>
+        <label>Importo<input id="edit-amount" type="number" min="0" step="0.01" required></label>
+        <p id="edit-error" class="form-error" hidden></p>
+        <div class="dialog-actions"><button id="cancel-edit" class="secondary" type="button">Annulla</button><button id="save-edit" class="primary" type="submit">Salva</button></div>
+      </form>
+    </dialog>
     <nav class="bottom-nav">
-      <a class="active" href="#wealth">◉ <span>Patrimonio</span></a>
-      <a href="#investments">↗ <span>Investimenti</span></a>
-      <a href="#stats">▥ <span>Budget</span></a>
-      <a href="#movements">↕ <span>Movimenti</span></a>
+      <a class="active" href="#wealth" data-view="home">◉ <span>Home</span></a>
+      <a href="#monthly-view" data-view="monthly">€ <span>Budget</span></a>
+      <a href="#annual-view" data-view="annual">▥ <span>Anno</span></a>
     </nav>
   </div>
   <script src="./config.js"></script>
