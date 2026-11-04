@@ -16,6 +16,12 @@ function doPost(e) {
     if (body.action === 'editMovement') {
       return jsonResponse_({ ok: true, id: editMovement_(spreadsheet, body) });
     }
+    if (body.action === 'saveBalance') {
+      return jsonResponse_({ ok: true, balance: saveBalance_(spreadsheet, body) });
+    }
+    if (body.action === 'saveCategoryBudgets') {
+      return jsonResponse_({ ok: true, categoryBudgets: saveCategoryBudgets_(spreadsheet, body) });
+    }
     if (body.action !== 'bootstrap') return jsonResponse_({ ok: false, error: 'Unsupported action.' });
 
     const timezone = spreadsheet.getSpreadsheetTimeZone();
@@ -23,7 +29,8 @@ function doPost(e) {
       ok: true,
       movimenti: readTransactions_(spreadsheet, timezone),
       budgets: readBudgets_(spreadsheet),
-      saldi: readBalances_(spreadsheet)
+      saldi: readBalances_(spreadsheet),
+      categoryBudgets: readCategoryBudgets_(spreadsheet)
     });
   } catch (error) {
     return jsonResponse_({ ok: false, error: 'Unable to read the configured spreadsheet.' });
@@ -159,6 +166,119 @@ function editMovement_(spreadsheet, body) {
   return rowNumber;
 }
 
+function readCategoryBudgets_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName('BudgetCategorie');
+  if (!sheet) return [];
+  return rows_(spreadsheet, 'BudgetCategorie', ['Anno', 'Mese', 'Categoria', 'Budget'])
+    .map(function (row) {
+      return { anno: row.Anno, mese: row.Mese, categoria: row.Categoria, budget: row.Budget };
+    });
+}
+
+function saveCategoryBudgets_(spreadsheet, body) {
+  const year = Number(body.anno);
+  const month = Number(body.mese);
+  const entries = body.budgets;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || !Array.isArray(entries)) {
+    throw new Error('Invalid category budget request.');
+  }
+  let sheet = spreadsheet.getSheetByName('BudgetCategorie');
+  if (!sheet) {
+    // Create the new tab only after the user explicitly saves category budgets.
+    sheet = spreadsheet.insertSheet('BudgetCategorie');
+    sheet.getRange(1, 1, 1, 4).setValues([['Anno', 'Mese', 'Categoria', 'Budget']]);
+  }
+  const width = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (value) { return String(value).trim(); });
+  const required = ['Anno', 'Mese', 'Categoria', 'Budget'];
+  if (!required.every(function (header) { return headers.indexOf(header) !== -1; })) {
+    throw new Error('BudgetCategorie headers are invalid.');
+  }
+  const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues() : [];
+  const yearCol = headers.indexOf('Anno');
+  const monthCol = headers.indexOf('Mese');
+  const categoryCol = headers.indexOf('Categoria');
+  const budgetCol = headers.indexOf('Budget');
+  const existing = {};
+  rows.forEach(function (row, index) {
+    if (Number(row[yearCol]) === year && Number(row[monthCol]) === month) {
+      existing[String(row[categoryCol])] = index + 2;
+    }
+  });
+  const seen = {};
+  entries.forEach(function (entry) {
+    const category = String(entry.categoria || '').trim();
+    const amount = Number(entry.budget);
+    if (!category || category.length > 80 || !Number.isFinite(amount) || amount < 0 || seen[category]) {
+      throw new Error('Invalid category budget value.');
+    }
+    seen[category] = true;
+    if (existing[category]) {
+      sheet.getRange(existing[category], budgetCol + 1).setValue(amount);
+    } else {
+      const newRow = new Array(width).fill('');
+      newRow[yearCol] = year;
+      newRow[monthCol] = month;
+      newRow[categoryCol] = category;
+      newRow[budgetCol] = amount;
+      sheet.getRange(sheet.getLastRow() + 1, 1, 1, width).setValues([newRow]);
+    }
+  });
+  return readCategoryBudgets_(spreadsheet);
+}
+
+function saveBalance_(spreadsheet, body) {
+  const sheet = spreadsheet.getSheetByName('SaldiMensili');
+  const year = Number(body.anno);
+  const month = Number(body.mese);
+  const values = {
+    'Conto finale': Number(body.contoFinale),
+    'Contanti finali': Number(body.contantiFinali),
+    'Investimenti fine mese': Number(body.investimentiFinali)
+  };
+  if (!sheet || !Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 ||
+      !Object.keys(values).every(function (key) { return Number.isFinite(values[key]) && values[key] >= 0; })) {
+    throw new Error('Invalid monthly balance.');
+  }
+  const width = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (value) { return String(value).trim(); });
+  const required = ['Anno', 'Mese', 'Conto iniziale', 'Contanti iniziali', 'Investimenti inizio mese',
+    'Conto finale', 'Contanti finali', 'Investimenti fine mese'];
+  if (!required.every(function (header) { return headers.indexOf(header) !== -1; })) {
+    throw new Error('SaldiMensili headers are invalid.');
+  }
+  const data = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues() : [];
+  const yearCol = headers.indexOf('Anno');
+  const monthCol = headers.indexOf('Mese');
+  const target = year * 12 + month;
+  let existingRow = null;
+  let prior = null;
+  data.forEach(function (row, index) {
+    const rowYear = Number(row[yearCol]);
+    const rowMonth = Number(row[monthCol]);
+    if (!Number.isInteger(rowYear) || !Number.isInteger(rowMonth)) return;
+    const key = rowYear * 12 + rowMonth;
+    if (key === target) existingRow = { number: index + 2, values: row };
+    if (key < target && (!prior || key > prior.key)) prior = { key: key, values: row };
+  });
+  const finalColumns = Object.keys(values);
+  if (existingRow) {
+    finalColumns.forEach(function (header) {
+      sheet.getRange(existingRow.number, headers.indexOf(header) + 1).setValue(values[header]);
+    });
+    return { anno: year, mese: month };
+  }
+  const newRow = new Array(width).fill('');
+  newRow[yearCol] = year;
+  newRow[monthCol] = month;
+  newRow[headers.indexOf('Conto iniziale')] = prior ? prior.values[headers.indexOf('Conto finale')] : 0;
+  newRow[headers.indexOf('Contanti iniziali')] = prior ? prior.values[headers.indexOf('Contanti finali')] : 0;
+  newRow[headers.indexOf('Investimenti inizio mese')] = prior ? prior.values[headers.indexOf('Investimenti fine mese')] : 0;
+  finalColumns.forEach(function (header) { newRow[headers.indexOf(header)] = values[header]; });
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, width).setValues([newRow]);
+  return { anno: year, mese: month };
+}
+
 function constantTimeEqual_(left, right) {
   let difference = left.length ^ right.length;
   const length = Math.max(left.length, right.length);
@@ -173,4 +293,3 @@ function jsonResponse_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
 }
-
