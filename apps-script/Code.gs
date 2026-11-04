@@ -28,10 +28,9 @@ function doPost(e) {
 function readTransactions_(spreadsheet, timezone) {
   return rows_(spreadsheet, 'Movimenti', ['Data', 'Tipo', 'Descrizione', 'Importo', 'Conto', 'Categoria'])
     .map(function (row) {
-      const date = row.Data instanceof Date
-        ? Utilities.formatDate(row.Data, timezone, 'yyyy-MM-dd')
-        : String(row.Data || '').slice(0, 10);
+      const date = transactionDate_(row.Data, timezone);
       const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+      if (!parts) throw new Error('A transaction date could not be parsed.');
       const year = parts ? Number(parts[1]) : null;
       const month = parts ? Number(parts[2]) - 1 : null;
       return {
@@ -46,6 +45,29 @@ function readTransactions_(spreadsheet, timezone) {
         categoria: row.Categoria
       };
     });
+}
+
+function transactionDate_(value, timezone) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, timezone, 'yyyy-MM-dd');
+  }
+  const text = String(value || '').trim();
+  let parts = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text);
+  if (parts) return parts[1] + '-' + pad2_(parts[2]) + '-' + pad2_(parts[3]);
+
+  // Apps Script may stringify a date as "Tue May 20 2025 ...". Keep the year
+  // while parsing instead of truncating the string to its first ten characters.
+  parts = /^(?:[A-Za-z]{3}\s+)?([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/.exec(text);
+  if (parts) {
+    const months = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+      Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+    if (months[parts[1]]) return parts[3] + '-' + months[parts[1]] + '-' + pad2_(parts[2]);
+  }
+  return '';
+}
+
+function pad2_(value) {
+  return ('0' + value).slice(-2);
 }
 
 function readBudgets_(spreadsheet) {
