@@ -38,16 +38,26 @@
       </section>
 
       <section class="view" id="home-view">
-        <section class="section-head page-section-head"><div><p class="eyebrow">CONFRONTO</p><h2>Patrimonio del mese</h2></div></section>
-        <section class="summary-grid wealth-comparison-grid">
-          <article class="panel overview-card"><span>Patrimonio iniziale</span><strong id="initial-wealth">—</strong><small id="initial-wealth-note">Saldo finale del mese precedente</small></article>
-          <article class="panel overview-card"><span>Patrimonio finale</span><strong id="final-wealth">—</strong><small id="final-wealth-note">Da inserire a fine mese</small></article>
-          <article class="panel overview-card"><span>Patrimonio atteso</span><strong id="expected-wealth">—</strong><small id="expected-wealth-note">Iniziale + entrate − uscite</small></article>
+        <section class="panel balance-summary-panel">
+          <div class="balance-summary-header"><p class="eyebrow">SALDI DEL MESE</p><button id="add-balance" class="secondary" type="button">Imposta</button></div>
+          <article class="panel overview-card balance-initial-card"><span>Saldo iniziale</span><strong id="initial-wealth">—</strong><small id="initial-wealth-note">Dal mese precedente</small></article>
+          <div class="balance-pair">
+            <article class="panel overview-card"><span>Saldo atteso</span><strong id="expected-wealth">—</strong><small id="expected-wealth-note">Iniziale + entrate − uscite</small></article>
+            <article class="panel overview-card"><span>Saldo effettivo</span><strong id="final-wealth">—</strong><small id="final-wealth-note">Da inserire a fine mese</small></article>
+          </div>
+          <div class="balance-difference"><span>Differenza effettivo / atteso</span><strong id="wealth-difference">—</strong></div>
+          <p class="balance-summary-note">A fine mese inserisci i valori finali di conto, contanti e investimenti per ottenere il saldo effettivo.</p>
+        </section>
+
+        <section class="overview-grid balance-flow-grid">
+          <article class="panel overview-card"><span>Entrate</span><strong id="home-income" class="positive">—</strong></article>
+          <article class="panel overview-card"><span>Uscite</span><strong id="home-expense" class="negative">—</strong></article>
+          <article class="panel overview-card"><span>Bilancio</span><strong id="home-net">—</strong><small>Investimenti esclusi dal bilancio</small></article>
         </section>
 
         <section class="section-head" id="wealth">
           <div><p class="eyebrow">PATRIMONIO</p><h2>Il tuo patrimonio</h2></div>
-          <div class="wealth-actions"><span id="balance-period" class="muted balance-period">Nessun saldo</span><button id="add-balance" class="secondary">＋ Patrimonio finale</button></div>
+          <div class="wealth-actions"><span id="balance-period" class="muted balance-period">Nessun saldo</span></div>
         </section>
         <section class="summary-grid wealth-grid">
           <article class="panel hero-card wealth-total"><p class="muted">Patrimonio totale</p><strong class="big-number" id="total-balance">—</strong></article>
@@ -63,13 +73,6 @@
         <section class="panel home-budget-panel">
           <div class="home-budget-total"><div><span>Disponibile</span><strong id="home-budget-remaining">—</strong></div><div><span>Speso</span><strong id="home-budget-spent">—</strong></div><div><span>Budget</span><strong id="home-budget-total">—</strong></div></div>
           <div id="home-category-budgets" class="category-budget-list"></div>
-        </section>
-
-        <section class="section-head"><div><p class="eyebrow">RIEPILOGO</p><h2>Entrate e uscite del mese</h2></div></section>
-        <section class="overview-grid">
-          <article class="panel overview-card"><span>Entrate</span><strong id="home-income" class="positive">—</strong></article>
-          <article class="panel overview-card"><span>Uscite</span><strong id="home-expense" class="negative">—</strong></article>
-          <article class="panel overview-card"><span>Bilancio</span><strong id="home-net">—</strong></article>
         </section>
 
         <section class="section-head" id="investments">
