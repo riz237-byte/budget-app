@@ -331,6 +331,6 @@ async function readJson_(request) {
   return data;
 }
 function json_(payload, status, cors) {
-  return new Response(JSON.stringify(payload), { status, headers: { ...RESPONSE_HEADERS, ...cors } });
+  return new Response(JSON.stringify(payload), { status, headers: { ...HEADERS, ...cors } });
 }
 
