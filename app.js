@@ -617,14 +617,24 @@ function updatePeriod() {
   if (dashboardData) render(dashboardData);
 }
 
-function openEdit(item) {
-  editingMovement = item;
-  $('edit-date').value = item.data || '';
-  $('edit-description').value = item.descrizione || '';
-  $('edit-type').value = item.tipo || 'Uscita';
-  $('edit-amount').value = item.importo ?? '';
+function localDateInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function showMovementForm(item, isNew) {
+  $('movement-dialog-title').textContent = isNew ? 'Aggiungi movimento' : 'Modifica movimento';
+  $('save-edit').textContent = isNew ? 'Aggiungi movimento' : 'Salva';
+  $('edit-date').value = item?.data || localDateInputValue();
+  $('edit-description').value = item?.descrizione || '';
+  $('edit-type').value = item?.tipo || 'Uscita';
+  $('edit-amount').value = item?.importo ?? '';
   const categories = [...new Set((dashboardData?.movimenti || []).map((movement) => movement.categoria).filter(Boolean))];
-  if (item.categoria && !categories.includes(item.categoria)) categories.push(item.categoria);
+  if (!categories.includes('Altro')) categories.push('Altro');
+  if (item?.categoria && !categories.includes(item.categoria)) categories.push(item.categoria);
   const select = $('edit-category');
   select.replaceChildren(...categories.map((categoryName) => {
     const option = document.createElement('option');
@@ -632,14 +642,24 @@ function openEdit(item) {
     option.textContent = categoryName;
     return option;
   }));
-  select.value = item.categoria || categories[0] || '';
+  select.value = item?.categoria || categories[0] || '';
   $('edit-error').hidden = true;
   $('edit-dialog').showModal();
 }
 
+function openEdit(item) {
+  editingMovement = item;
+  showMovementForm(item, false);
+}
+
+function openAddMovement() {
+  editingMovement = null;
+  showMovementForm(null, true);
+}
+
 async function saveEdit(event) {
   event.preventDefault();
-  if (!editingMovement || !API_BASE) return;
+  if (!API_BASE) return;
   const saveButton = $('save-edit');
   saveButton.disabled = true;
   $('edit-error').hidden = true;
@@ -651,10 +671,12 @@ async function saveEdit(event) {
     importo: Number($('edit-amount').value),
   };
   try {
-    const response = await apiFetch('/api/movimenti/edit', {
+    const endpoint = editingMovement ? '/api/movimenti/edit' : '/api/movimenti/add';
+    const payload = editingMovement ? { id: editingMovement.id, changes } : { changes };
+    const response = await apiFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editingMovement.id, changes }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) throw new Error('save failed');
     const result = await response.json();
@@ -662,7 +684,7 @@ async function saveEdit(event) {
     $('edit-dialog').close();
     await load();
   } catch (error) {
-    $('edit-error').textContent = 'Modifica non salvata. Controlla l’accesso e riprova.';
+    $('edit-error').textContent = editingMovement ? 'Modifica non salvata. Controlla l’accesso e riprova.' : 'Movimento non aggiunto. Controlla l’accesso e riprova.';
     $('edit-error').hidden = false;
   } finally {
     saveButton.disabled = false;
@@ -776,6 +798,7 @@ $('edit-form').addEventListener('submit', saveEdit);
 $('close-edit').addEventListener('click', () => $('edit-dialog').close());
 $('cancel-edit').addEventListener('click', () => $('edit-dialog').close());
 $('add-balance').addEventListener('click', openBalanceForm);
+$('add-movement').addEventListener('click', openAddMovement);
 $('balance-form').addEventListener('submit', saveBalance);
 $('close-balance').addEventListener('click', () => $('balance-dialog').close());
 $('cancel-balance').addEventListener('click', () => $('balance-dialog').close());
