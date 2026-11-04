@@ -1,13 +1,18 @@
-const RESPONSE_HEADERS = {
+const HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store, max-age=0',
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
 };
+const PASSWORD_ITERATIONS = 310000;
+const SESSION_DAYS = 30;
+const AUTH_WINDOW_SECONDS = 900;
+const AUTH_MAX_ATTEMPTS = 8;
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
     const origin = request.headers.get('Origin');
     const allowedOrigin = env.ALLOWED_ORIGIN;
     const cors = origin === allowedOrigin ? {
@@ -17,11 +22,10 @@ export default {
       'access-control-max-age': '600',
       vary: 'Origin',
     } : { vary: 'Origin' };
-    const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
       return origin === allowedOrigin
-        ? new Response(null, { status: 204, headers: { ...RESPONSE_HEADERS, ...cors } })
+        ? new Response(null, { status: 204, headers: { ...HEADERS, ...cors } })
         : json_({ error: 'Origin not allowed.' }, 403, cors);
     }
     if (!allowedOrigin || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY ||
