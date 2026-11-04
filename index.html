@@ -86,7 +86,7 @@
       </section>
 
       <section class="view" id="monthly-view" hidden>
-        <section class="section-head page-section-head"><div><p class="eyebrow">BUDGET MENSILE</p><h2>Riepilogo del mese</h2></div></section>
+        <section class="section-head page-section-head"><div><p class="eyebrow">BUDGET MENSILE</p><h2>Riepilogo del mese</h2></div><label class="monthly-budget-total">Totale mensile €<input id="monthly-budget-total-input" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Totale budget mensile"></label></section>
         <section class="summary-grid">
           <article class="panel hero-card">
             <p class="muted">Disponibilità del mese</p><strong class="big-number" id="remaining">—</strong>
@@ -99,8 +99,9 @@
         </section>
         <section class="section-head"><div><p class="eyebrow">CATEGORIE</p><h2>Budget mensile per categoria</h2></div></section>
         <section class="panel category-editor-panel">
+          <div class="category-editor-header"><span>Categoria</span><span>Percentuale</span><span>Importo mensile</span></div>
           <div id="category-budget-editor" class="category-editor-list"></div>
-          <div class="category-editor-footer"><span>Totale budget categorie <strong id="category-budget-total">—</strong></span><button id="save-category-budgets" class="primary" type="button">Salva budget</button></div>
+          <div class="category-editor-footer"><span>Ripartizione categorie <strong id="category-budget-total">—</strong></span><button id="save-category-budgets" class="primary" type="button">Salva budget</button></div>
           <p id="category-budget-status" class="muted editor-status" role="status"></p>
         </section>
       </section>
