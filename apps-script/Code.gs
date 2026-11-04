@@ -20,7 +20,7 @@ function doPost(e) {
       return jsonResponse_({ ok: true, balance: saveBalance_(spreadsheet, body) });
     }
     if (body.action === 'saveCategoryBudgets') {
-      return jsonResponse_({ ok: true, categoryBudgets: saveCategoryBudgets_(spreadsheet, body) });
+      return jsonResponse_({ ok: true, ...saveCategoryBudgets_(spreadsheet, body) });
     }
     if (body.action !== 'bootstrap') return jsonResponse_({ ok: false, error: 'Unsupported action.' });
 
@@ -171,60 +171,103 @@ function readCategoryBudgets_(spreadsheet) {
   if (!sheet) return [];
   return rows_(spreadsheet, 'BudgetCategorie', ['Anno', 'Mese', 'Categoria', 'Budget'])
     .map(function (row) {
-      return { anno: row.Anno, mese: row.Mese, categoria: row.Categoria, budget: row.Budget };
+      return { anno: row.Anno, mese: row.Mese, categoria: row.Categoria, budget: row.Budget,
+        percentuale: row.Percentuale === undefined ? null : row.Percentuale };
     });
 }
 
 function saveCategoryBudgets_(spreadsheet, body) {
   const year = Number(body.anno);
   const month = Number(body.mese);
+  const total = Number(body.total);
   const entries = body.budgets;
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || !Array.isArray(entries)) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 ||
+      !Number.isFinite(total) || total <= 0 || !Array.isArray(entries) || entries.length !== 6) {
     throw new Error('Invalid category budget request.');
   }
+  const seen = {};
+  entries.forEach(function (entry) {
+    const category = String(entry.categoria || '').trim();
+    const amount = Number(entry.budget);
+    const percentage = Number(entry.percentuale);
+    if (!category || category.length > 80 || !Number.isFinite(amount) || amount < 0 ||
+        !Number.isFinite(percentage) || percentage < 0 || seen[category]) {
+      throw new Error('Invalid category budget value.');
+    }
+    seen[category] = true;
+  });
+
+  const monthlySheet = spreadsheet.getSheetByName('BudgetMensili');
+  if (!monthlySheet) throw new Error('BudgetMensili sheet is missing.');
+  const monthlyWidth = monthlySheet.getLastColumn();
+  const monthlyHeaders = monthlySheet.getRange(1, 1, 1, monthlyWidth).getValues()[0]
+    .map(function (value) { return String(value).trim(); });
+  if (!['Anno', 'Mese', 'Budget mensile'].every(function (header) { return monthlyHeaders.indexOf(header) !== -1; })) {
+    throw new Error('BudgetMensili headers are invalid.');
+  }
+  const budgetColumn = monthlyHeaders.indexOf('Budget mensile');
+  const monthlyRows = monthlySheet.getLastRow() > 1
+    ? monthlySheet.getRange(2, 1, monthlySheet.getLastRow() - 1, monthlyWidth).getValues() : [];
+  const monthRow = monthlyRows.findIndex(function (row) {
+    return Number(row[monthlyHeaders.indexOf('Anno')]) === year && Number(row[monthlyHeaders.indexOf('Mese')]) === month;
+  });
+  if (monthRow >= 0) {
+    monthlySheet.getRange(monthRow + 2, budgetColumn + 1).setValue(total);
+  } else {
+    const newBudgetRow = new Array(monthlyWidth).fill('');
+    newBudgetRow[monthlyHeaders.indexOf('Anno')] = year;
+    newBudgetRow[monthlyHeaders.indexOf('Mese')] = month;
+    newBudgetRow[budgetColumn] = total;
+    monthlySheet.getRange(monthlySheet.getLastRow() + 1, 1, 1, monthlyWidth).setValues([newBudgetRow]);
+  }
+
   let sheet = spreadsheet.getSheetByName('BudgetCategorie');
   if (!sheet) {
-    // Create the new tab only after the user explicitly saves category budgets.
+    // Create the new tab only after the user explicitly saves the budget plan.
     sheet = spreadsheet.insertSheet('BudgetCategorie');
-    sheet.getRange(1, 1, 1, 4).setValues([['Anno', 'Mese', 'Categoria', 'Budget']]);
+    sheet.getRange(1, 1, 1, 5).setValues([['Anno', 'Mese', 'Categoria', 'Budget', 'Percentuale']]);
   }
-  const width = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (value) { return String(value).trim(); });
+  let width = sheet.getLastColumn();
+  let headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (value) { return String(value).trim(); });
   const required = ['Anno', 'Mese', 'Categoria', 'Budget'];
   if (!required.every(function (header) { return headers.indexOf(header) !== -1; })) {
     throw new Error('BudgetCategorie headers are invalid.');
+  }
+  if (headers.indexOf('Percentuale') === -1) {
+    width += 1;
+    sheet.getRange(1, width).setValue('Percentuale');
+    headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (value) { return String(value).trim(); });
   }
   const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues() : [];
   const yearCol = headers.indexOf('Anno');
   const monthCol = headers.indexOf('Mese');
   const categoryCol = headers.indexOf('Categoria');
   const budgetCol = headers.indexOf('Budget');
+  const percentageCol = headers.indexOf('Percentuale');
   const existing = {};
   rows.forEach(function (row, index) {
     if (Number(row[yearCol]) === year && Number(row[monthCol]) === month) {
       existing[String(row[categoryCol])] = index + 2;
     }
   });
-  const seen = {};
   entries.forEach(function (entry) {
     const category = String(entry.categoria || '').trim();
     const amount = Number(entry.budget);
-    if (!category || category.length > 80 || !Number.isFinite(amount) || amount < 0 || seen[category]) {
-      throw new Error('Invalid category budget value.');
-    }
-    seen[category] = true;
+    const percentage = Number(entry.percentuale);
     if (existing[category]) {
       sheet.getRange(existing[category], budgetCol + 1).setValue(amount);
+      sheet.getRange(existing[category], percentageCol + 1).setValue(percentage);
     } else {
       const newRow = new Array(width).fill('');
       newRow[yearCol] = year;
       newRow[monthCol] = month;
       newRow[categoryCol] = category;
       newRow[budgetCol] = amount;
+      newRow[percentageCol] = percentage;
       sheet.getRange(sheet.getLastRow() + 1, 1, 1, width).setValues([newRow]);
     }
   });
-  return readCategoryBudgets_(spreadsheet);
+  return { categoryBudgets: readCategoryBudgets_(spreadsheet), budgets: readBudgets_(spreadsheet) };
 }
 
 function saveBalance_(spreadsheet, body) {
