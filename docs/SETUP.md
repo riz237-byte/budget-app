@@ -14,7 +14,7 @@ Il backend legge i fogli già esistenti e non esegue inizializzazioni, importazi
 2. In **Settings → Variables and Secrets** verifica che `GAS_URL` punti all'URL `/exec` Apps Script, `ALLOWED_ORIGIN` sia `https://riz237-byte.github.io` e `API_SECRET` sia il secret già configurato.
 3. Distribuisci il Worker. Mantieni Cloudflare Access attivo solo per gli utenti autorizzati e mantieni il bypass delle richieste `OPTIONS`; il codice Worker risponde con CORS per l'origine esatta.
 
-Il Worker espone `GET /api/bootstrap`, `POST /api/movimenti/edit`, `POST /api/saldi/save` e `POST /api/budgets/categories`. I tre percorsi POST sono chiamati solo dai rispettivi pulsanti **Salva** nell'app. I saldi modificano o aggiungono la riga del mese selezionato in `SaldiMensili`; il primo saldo inserito parte da valori iniziali pari a zero. I budget per categoria usano la scheda `BudgetCategorie` con colonne `Anno`, `Mese`, `Categoria`, `Budget`. Il conto dei movimenti non è mostrato né modificabile.
+Il Worker espone `GET /api/bootstrap`, `POST /api/movimenti/edit`, `POST /api/saldi/save` e `POST /api/budgets/categories`. I tre percorsi POST sono chiamati solo dai rispettivi pulsanti **Salva** nell'app. I saldi modificano o aggiungono la riga del mese selezionato in `SaldiMensili`; il primo saldo inserito parte da valori iniziali pari a zero. I budget usano `BudgetMensili` per il totale mensile e la scheda `BudgetCategorie` per categoria, percentuale e importo. Il conto dei movimenti non è mostrato né modificabile.
 
 ## Pubblicare l'interfaccia
 
@@ -25,7 +25,8 @@ Le modifiche in `index.html`, `app.js` e `styles.css` si pubblicano con GitHub P
 - Patrimonio e totale usano l'ultimo saldo mensile disponibile fino al mese visualizzato, usando i valori finali inseriti nell'app o nel foglio. Il patrimonio atteso parte dal patrimonio finale del mese precedente e aggiunge entrate meno uscite del mese.
 - I versamenti sono movimenti `Uscita` con categoria `Investimenti`; i prelievi sono `Entrata` con categoria `Investimenti`.
 - Il capitale investito cumulativo è la somma dei versamenti (uscite con categoria `Investimenti`) meno i prelievi (entrate con la stessa categoria). Il guadagno mensile è fine mese meno inizio mese, meno versamenti, più prelievi. Il guadagno totale è fine mese meno capitale investito cumulativo.
-- I budget per categoria si modificano nella pagina **Budget mensile**. Quando vengono salvati, si applicano da quel mese in avanti fino a una modifica successiva. La home mostra il budget, quanto è stato speso e quanto resta per ogni categoria.
+- Il piano iniziale da 360 € ripartisce il budget in Investimenti 45%, Spese fisse 16,2%, Cibo 19,4%, Trasporti 5%, Shopping / svago 8,3% e Imprevisti / altro 6%. Le percentuali sono arrotondate e sommano al 99,9%. Spese fisse viene associato agli Abbonamenti.
+- Nella pagina **Budget mensile** si possono modificare il totale, la percentuale e l'importo di ciascuna voce. Cambiare percentuale ricalcola l'importo; cambiare importo ricalcola la percentuale; cambiare il totale ricalcola gli importi. Il salvataggio applica i valori da quel mese in avanti fino alla modifica successiva. La home mostra speso, disponibile e budget per ciascuna voce.
 - Budget mensile e riepilogo annuale escludono i movimenti di categoria `Investimenti` dalle uscite di budget.
 
 ## Verifica manuale
