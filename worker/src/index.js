@@ -101,12 +101,16 @@ async function signUp_(request, env, cors) {
 
 async function authPost_(request, env, endpoint, cors) {
   const body = await readJson_(request);
-  if (endpoint.endsWith('password') && (!body.email || !body.password)) {
-    return json_({ error: 'Inserisci email e password.' }, 400, cors);
+  if (endpoint.endsWith('password')) {
+    if (!body.email || !body.password) return json_({ error: 'Inserisci email e password.' }, 400, cors);
+    if (normalizeEmail_(body.email) !== normalizeEmail_(env.OWNER_EMAIL)) return json_({ error: 'Email o password non corretti.' }, 401, cors);
   }
   if (endpoint.endsWith('refresh_token') && !body.refresh_token) return json_({ error: 'Sessione non valida.' }, 400, cors);
   const result = await supabaseFetch_(env, `/auth/v1/${endpoint}`, { method: 'POST', body });
   if (!result.response.ok) return json_({ error: authError_(result.payload) }, result.response.status, cors);
+  if (endpoint.endsWith('refresh_token') && normalizeEmail_(result.payload?.user?.email) !== normalizeEmail_(env.OWNER_EMAIL)) {
+    return json_({ error: 'Sessione non valida.' }, 401, cors);
+  }
   return json_({ ok: true, ...session_(result.payload) }, 200, cors);
 }
 
