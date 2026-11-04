@@ -11,38 +11,59 @@ export default {
     const cors = origin && origin === allowedOrigin ? {
       'access-control-allow-origin': allowedOrigin,
       'access-control-allow-credentials': 'true',
-      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'Accept, Content-Type',
       'access-control-max-age': '600',
       vary: 'Origin',
     } : { vary: 'Origin' };
     const url = new URL(request.url);
 
-    if (url.pathname !== '/api/bootstrap') return json_({ error: 'Not found.' }, 404, cors);
     if (request.method === 'OPTIONS') {
       return origin === allowedOrigin
         ? new Response(null, { status: 204, headers: { ...RESPONSE_HEADERS, ...cors } })
         : json_({ error: 'Origin not allowed.' }, 403, cors);
     }
-    if (request.method !== 'GET') return json_({ error: 'Method not allowed.' }, 405, { ...cors, allow: 'GET, OPTIONS' });
     if (origin && origin !== allowedOrigin) return json_({ error: 'Origin not allowed.' }, 403, cors);
     if (!env.GAS_URL || !env.API_SECRET || !allowedOrigin) return json_({ error: 'Service is not configured.' }, 503, cors);
+
+    let action;
+    let gasRequest;
+    if (url.pathname === '/api/bootstrap' && request.method === 'GET') {
+      action = 'bootstrap';
+      gasRequest = { action, secret: env.API_SECRET };
+    } else if (url.pathname === '/api/movimenti/edit' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        if (!body || !body.changes) return json_({ error: 'Invalid edit request.' }, 400, cors);
+        action = 'editMovement';
+        gasRequest = { action, secret: env.API_SECRET, id: body.id, changes: body.changes };
+      } catch (error) {
+        return json_({ error: 'Invalid edit request.' }, 400, cors);
+      }
+    } else if (url.pathname.startsWith('/api/')) {
+      return json_({ error: 'Method not allowed.' }, 405, { ...cors, allow: 'GET /api/bootstrap, POST /api/movimenti/edit, OPTIONS' });
+    } else {
+      return json_({ error: 'Not found.' }, 404, cors);
+    }
 
     try {
       const upstream = await fetch(env.GAS_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'bootstrap', secret: env.API_SECRET }),
+        body: JSON.stringify(gasRequest),
         redirect: 'follow',
       });
       const payload = await upstream.json();
-      if (!upstream.ok || !payload || payload.ok !== true ||
-          !Array.isArray(payload.movimenti) || !Array.isArray(payload.budgets) || !Array.isArray(payload.saldi)) {
-        return json_({ error: 'Unable to load budget data.' }, 502, cors);
+      if (!upstream.ok || !payload || payload.ok !== true) {
+        return json_({ error: 'Unable to complete the request.' }, 502, cors);
+      }
+      if (action === 'bootstrap' &&
+          (!Array.isArray(payload.movimenti) || !Array.isArray(payload.budgets) || !Array.isArray(payload.saldi))) {
+        return json_({ error: 'Invalid bootstrap response.' }, 502, cors);
       }
       return json_(payload, 200, cors);
     } catch (error) {
-      return json_({ error: 'Unable to load budget data.' }, 502, cors);
+      return json_({ error: 'Unable to complete the request.' }, 502, cors);
     }
   },
 };
