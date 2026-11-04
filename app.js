@@ -9,19 +9,49 @@ let month = now.getMonth();
 let dashboardData = null;
 let editingMovement = null;
 let authToken = sessionStorage.getItem('budget-auth-token') || '';
+let refreshToken = sessionStorage.getItem('budget-refresh-token') || '';
 let setupMode = false;
 
-function apiFetch(path, options = {}) {
+function saveSession(session) {
+  authToken = session.access_token || '';
+  refreshToken = session.refresh_token || '';
+  if (authToken) sessionStorage.setItem('budget-auth-token', authToken);
+  if (refreshToken) sessionStorage.setItem('budget-refresh-token', refreshToken);
+}
+
+function clearSession() {
+  authToken = '';
+  refreshToken = '';
+  sessionStorage.removeItem('budget-auth-token');
+  sessionStorage.removeItem('budget-refresh-token');
+}
+
+async function refreshSession() {
+  if (!refreshToken) return false;
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }), cache: 'no-store',
+    });
+    const session = await response.json();
+    if (!response.ok || !session.access_token) return false;
+    saveSession(session);
+    return true;
+  } catch (error) { return false; }
+}
+
+async function apiFetch(path, options = {}, retried = false) {
   const headers = new Headers(options.headers || {});
   if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
-  return fetch(`${API_BASE}${path}`, { ...options, headers, cache: 'no-store' }).then((response) => {
-    if (response.status === 401) {
-      authToken = '';
-      sessionStorage.removeItem('budget-auth-token');
-      showAuth(false);
-    }
-    return response;
-  });
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: 'no-store' });
+  if (response.status === 401 && !retried && refreshToken && !path.startsWith('/api/auth/')) {
+    if (await refreshSession()) return apiFetch(path, options, true);
+  }
+  if (response.status === 401) {
+    clearSession();
+    showAuth(false);
+  }
+  return response;
 }
 
 function showAuth(setupRequired) {
@@ -32,7 +62,7 @@ function showAuth(setupRequired) {
   $('auth-eyebrow').textContent = setupMode ? 'CONFIGURAZIONE INIZIALE' : 'ACCESSO';
   $('auth-title').textContent = setupMode ? 'Crea il tuo accesso' : 'Accedi';
   $('auth-description').textContent = setupMode
-    ? 'Usa la tua email e scegli una password di almeno 12 caratteri.'
+    ? 'Crea l’accesso con la tua email e una password di almeno 12 caratteri. Ti invieremo un messaggio di verifica.'
     : 'Accedi al tuo spazio personale.';
   $('auth-submit').textContent = setupMode ? 'Crea account' : 'Accedi';
   $('auth-password').autocomplete = setupMode ? 'new-password' : 'current-password';
@@ -49,6 +79,11 @@ async function startAuthentication() {
     return;
   }
   try {
+    acceptAuthFragment_();
+    if (authToken) {
+      await openAuthenticatedApp();
+      return;
+    }
     const statusResponse = await fetch(`${API_BASE}/api/auth/status`, { cache: 'no-store' });
     if (!statusResponse.ok) throw new Error('status unavailable');
     const status = await statusResponse.json();
@@ -65,6 +100,16 @@ async function startAuthentication() {
     showAuth(false);
     $('auth-error').textContent = 'Servizio non raggiungibile. Riprova tra poco.';
     $('auth-error').hidden = false;
+  }
+}
+
+function acceptAuthFragment_() {
+  const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const accessToken = fragment.get('access_token');
+  const newRefreshToken = fragment.get('refresh_token');
+  if (accessToken && newRefreshToken) {
+    saveSession({ access_token: accessToken, refresh_token: newRefreshToken });
+    history.replaceState(null, '', location.pathname + location.search);
   }
 }
 
@@ -96,9 +141,17 @@ async function submitAuth(event) {
       method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store',
     });
     const result = await response.json();
-    if (!response.ok || !result.ok || !result.token) throw new Error(result.error || 'Accesso non riuscito.');
-    authToken = result.token;
-    sessionStorage.setItem('budget-auth-token', authToken);
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Accesso non riuscito.');
+    if (result.confirmationRequired) {
+      $('auth-password').value = '';
+      $('setup-key').value = '';
+      showAuth(false);
+      $('auth-error').textContent = 'Account creato. Apri il messaggio di Supabase e conferma l’email, poi accedi.';
+      $('auth-error').hidden = false;
+      return;
+    }
+    if (!result.access_token) throw new Error('Accesso non riuscito.');
+    saveSession(result);
     $('auth-password').value = '';
     $('setup-key').value = '';
     await openAuthenticatedApp();
@@ -112,8 +165,7 @@ async function submitAuth(event) {
 
 async function logout() {
   try { if (authToken) await apiFetch('/api/auth/logout', { method: 'POST' }); } catch (error) { /* Expired sessions are cleared locally. */ }
-  authToken = '';
-  sessionStorage.removeItem('budget-auth-token');
+  clearSession();
   dashboardData = null;
   $('migration-screen').hidden = true;
   showAuth(false);
@@ -537,7 +589,7 @@ function render(data) {
   renderAnnual(data);
   renderMovements(movementsForMonth(data.movimenti || [], year, month));
   $('connection').textContent = 'Collegato';
-  $('notice').textContent = 'Dati caricati dal database Cloudflare.';
+  $('notice').textContent = 'Dati caricati dal database Supabase.';
 }
 
 function setView(view) {

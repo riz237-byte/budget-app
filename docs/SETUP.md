@@ -1,42 +1,40 @@
-# Cloudflare: database, accesso e passaggio dei dati
+# Supabase, accesso e trasferimento dati
 
-L'app usa GitHub Pages per la pagina e Cloudflare Worker + D1 per il servizio e i dati. L'accesso è con email e password. Il foglio Google viene letto una sola volta durante la migrazione e resta intatto come copia di sicurezza.
+La pagina resta su GitHub Pages. Supabase gestisce l’accesso email/password e salva i dati; il Worker Cloudflare fa da collegamento server-side, così nessuna chiave Supabase o Google è nel browser o nel repository. Le tabelle applicano Row Level Security e accettano solo le righe dell’utente autenticato.
 
-## Preparare D1
+## Progetto Supabase
 
-1. In Cloudflare apri **Workers & Pages → D1 SQL Database → Create database** e crea `budget-app-db`.
-2. Copia il **Database ID** mostrato da Cloudflare. È un identificativo, non una password.
-3. Nel progetto sostituisci `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID` in `worker/wrangler.toml` con quel valore.
-4. Apri la Console SQL del database e applica tutto il contenuto di `worker/migrations/0001_initial.sql` una volta sola.
+Il progetto **Budget App** è stato creato in regione UE e le tabelle `movements`, `monthly_budgets`, `category_budgets`, `balances` e `migration_state` sono state predisposte con RLS. Il progetto è sul piano gratuito: Supabase può sospendere i progetti gratuiti dopo una settimana di attività insufficiente; i dati restano nel progetto e si può riattivare dal pannello. Consulta [prezzi](https://supabase.com/pricing) e [sospensione dei progetti gratuiti](https://supabase.com/docs/guides/platform/free-project-pausing).
 
-## Collegare il Worker
+## Impostazioni private del Worker
 
-Nel Worker `budget-app-api`, aggiungi il binding D1 con nome `DB` e scegli `budget-app-db`. Imposta queste variabili in **Settings → Variables and Secrets**:
+Nel Worker `budget-app-api`, in **Settings → Variables and Secrets**, imposta o aggiungi:
 
-- `ALLOWED_ORIGIN`: `https://riz237-byte.github.io`.
-- `OWNER_EMAIL` come **secret**: il tuo indirizzo email di accesso.
-- `INITIAL_SETUP_KEY` come **secret**: una stringa casuale lunga almeno 32 caratteri. La userai una sola volta per creare l'accesso iniziale.
-- Mantieni temporaneamente le variabili/secret esistenti `GAS_URL` e `API_SECRET`: servono solo a leggere il foglio per la migrazione.
+- `ALLOWED_ORIGIN` (variabile): `https://riz237-byte.github.io`.
+- `APP_URL` (variabile): `https://riz237-byte.github.io/budget-app/`.
+- `SUPABASE_URL` (secret): l’URL API del progetto Budget App.
+- `SUPABASE_PUBLISHABLE_KEY` (secret): la chiave publishable del progetto.
+- `OWNER_EMAIL` (secret): l’indirizzo email autorizzato.
+- `INITIAL_SETUP_KEY` (secret): una stringa casuale lunga almeno 32 caratteri, da usare per la prima registrazione.
+- Conserva temporaneamente `GAS_URL` e `API_SECRET` già configurati: servono solo alla copia iniziale dei dati.
 
-Pubblica `worker/src/index.js` e verifica che il Worker riceva il binding `DB`. Se Cloudflare Access è attivo su questo Worker, disattivalo: il nuovo login dell'app protegge già le richieste e Access intercetterebbe la schermata di accesso.
+Non usare mai la chiave `service_role` o una chiave `sb_secret_` nel Worker o nel frontend. Il Worker inoltra le richieste con la sessione dell’utente; i controlli RLS del database restano attivi.
 
-## Creare l'accesso e trasferire i dati
+Pubblica `worker/src/index.js` e verifica il binding delle variabili. Disattiva Cloudflare Access sul Worker: altrimenti intercetterebbe le richieste di accesso e il preflight CORS. Il Worker gestisce già `OPTIONS` e consente solo l’origine GitHub Pages.
 
-1. Apri `https://riz237-byte.github.io/budget-app/` e inserisci l'indirizzo email autorizzato, la password scelta (almeno 12 caratteri) e `INITIAL_SETUP_KEY`.
-2. L'app mostra il trasferimento dal foglio. Premi **Copia i miei dati**: il Worker legge i movimenti, i budget, i saldi e i budget per categoria già presenti e li copia in D1. Nessun dato viene scritto o cancellato nel foglio.
-3. Verifica la dashboard, il totale dei movimenti e gli ultimi saldi. Il trasferimento è registrato come completato e non viene ripetuto automaticamente.
-4. Dopo la verifica, elimina `GAS_URL` e `API_SECRET` dai segreti/variabili del Worker. Da quel momento il Worker non dipende più da Google Sheets.
+## Primo accesso e migrazione
 
-La password viene derivata con PBKDF2 e non è salvata in chiaro. Le sessioni durano 30 giorni e il token è conservato nella sessione della scheda del browser; chiudendo la scheda può essere necessario accedere di nuovo. Non mettere password o chiavi segrete in `config.js`, nel repository o nei messaggi.
+1. In Supabase → **Authentication → URL Configuration**, imposta il **Site URL** e aggiungi ai redirect consentiti l’URL esatto `https://riz237-byte.github.io/budget-app/`.
+2. Apri l’app e crea l’account con l’email autorizzata, la password scelta (almeno 12 caratteri) e `INITIAL_SETUP_KEY`.
+3. Conferma l’indirizzo email dal messaggio ricevuto. Poi rimuovi `INITIAL_SETUP_KEY` dalle variabili del Worker: da quel momento la registrazione iniziale è chiusa.
+4. Accedi all’app. Nella schermata di trasferimento premi **Copia i miei dati**. Il Worker legge dal foglio movimenti, budget, saldi e budget per categoria e li copia nel progetto Supabase. Il foglio non viene modificato.
+5. Controlla il numero di movimenti e saldi mostrato al termine e confronta la dashboard. Solo dopo la verifica elimina `GAS_URL` e `API_SECRET` dalle impostazioni del Worker.
 
-## Distribuzione
+Se non ricevi il messaggio di conferma, controlla la posta indesiderata e la configurazione email di Supabase. Non inviare password, chiavi o codici qui.
 
-GitHub Pages continua a usare l'URL pubblico del Worker in `config.js`. `worker/wrangler.toml` contiene solo il binding e l'origine pubblica; `OWNER_EMAIL`, `INITIAL_SETUP_KEY`, `API_SECRET` e ogni altra chiave restano nelle impostazioni private del Worker. Non caricare file esportati dal foglio nel repository.
+## Dati e sicurezza
 
-## Verifica
+La password è gestita da Supabase Auth; il Worker non la conserva. Le sessioni si rinnovano con il refresh token e restano nella sessione del browser. Ogni richiesta ai dati verifica l’utente e passa la sua sessione alle API Supabase, dove le policy RLS limitano lettura e modifiche alle sue righe. Il trasferimento si può riprovare se si interrompe: usa upsert e non cancella righe.
 
-- Senza login, `/api/bootstrap` deve rispondere `401` e non restituire dati.
-- Dopo il login, la dashboard deve mostrare i dati importati; prova anche una modifica a un budget e ricarica la pagina.
-- `OPTIONS` deve ricevere `204` con CORS solo per l'origine GitHub Pages configurata.
-- La schermata iniziale e il trasferimento devono essere completati prima di rimuovere i vecchi segreti Google dal Worker.
+Il repository include solo codice e schema. Non aggiungere esportazioni dal foglio, password, chiavi, `GAS_URL` o `API_SECRET`.
 

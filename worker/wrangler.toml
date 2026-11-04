@@ -3,11 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-11-04"
 
 [vars]
-# Allowed browser origin; secrets and the owner email are set in Cloudflare.
+# Public URLs only. Keys, email and migration secrets stay in Cloudflare settings.
 ALLOWED_ORIGIN = "https://riz237-byte.github.io"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "budget-app-db"
-database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+APP_URL = "https://riz237-byte.github.io/budget-app/"
 
