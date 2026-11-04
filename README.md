@@ -1,8 +1,8 @@
 # Budget App
 
-Dashboard personale in sola lettura, pubblicato con GitHub Pages e collegato a Google Sheets attraverso Cloudflare Worker e Google Apps Script.
+Dashboard personale pubblicata con GitHub Pages e collegata a Google Sheets tramite Cloudflare Worker e Apps Script.
 
-Il bootstrap legge soltanto i fogli esistenti `Movimenti`, `BudgetMensili` e `SaldiMensili`. Non esegue inizializzazioni, migrazioni, importazioni, reset o scritture. Il repository non contiene ID del foglio, segreti o dati finanziari.
+La home mostra patrimonio totale, ultimo saldo inserito, investimento del mese e tutti i movimenti del mese selezionato. Il menu include **Budget mensile** e **Riepilogo annuale**. La modifica di un movimento aggiorna solo la riga selezionata quando si preme **Salva**.
 
-Prima di collegare il foglio, proteggi il Worker con Cloudflare Access: la restrizione CORS non è un controllo di accesso. La procedura completa è in [docs/SETUP.md](docs/SETUP.md).
+Il backend non esegue inizializzazioni, migrazioni, importazioni o reset. Il repository non contiene l'ID del foglio, segreti o dati finanziari. Vedi [docs/SETUP.md](docs/SETUP.md) per pubblicare gli aggiornamenti.
 
