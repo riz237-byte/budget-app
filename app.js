@@ -16,21 +16,27 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function monthKey(item) {
+function balanceMonthKey(item) {
   const itemYear = numberOrNull(item.anno);
   const itemMonth = numberOrNull(item.mese);
   return itemYear === null || itemMonth === null ? null : itemYear * 12 + itemMonth;
 }
 
+function movementMonthKey(item) {
+  const itemYear = numberOrNull(item.anno);
+  const itemMonth = numberOrNull(item.mese);
+  return itemYear === null || itemMonth === null ? null : itemYear * 12 + itemMonth + 1;
+}
+
 function selectedBalance(saldi) {
   const requested = year * 12 + month + 1;
-  return (saldi || []).filter((item) => monthKey(item) !== null && monthKey(item) <= requested)
-    .sort((a, b) => monthKey(b) - monthKey(a))[0] || null;
+  return (saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) <= requested)
+    .sort((a, b) => balanceMonthKey(b) - balanceMonthKey(a))[0] || null;
 }
 
 function investmentFlows(movements, minKey, maxKey) {
   return (movements || []).reduce((totals, item) => {
-    const key = monthKey(item);
+    const key = movementMonthKey(item);
     if (key === null || key < minKey || key > maxKey || item.categoria !== 'Investimenti') return totals;
     const amount = Number(item.importo) || 0;
     if (item.tipo === 'Uscita') totals.deposits += amount;
@@ -61,11 +67,11 @@ function renderWealth(data) {
     return;
   }
 
-  const referenceKey = monthKey(balance);
-  const investmentMonths = (data.saldi || []).filter((item) => monthKey(item) !== null && monthKey(item) <= referenceKey)
-    .sort((a, b) => monthKey(a) - monthKey(b));
+  const referenceKey = balanceMonthKey(balance);
+  const investmentMonths = (data.saldi || []).filter((item) => balanceMonthKey(item) !== null && balanceMonthKey(item) <= referenceKey)
+    .sort((a, b) => balanceMonthKey(a) - balanceMonthKey(b));
   const firstMonth = investmentMonths[0];
-  const firstKey = monthKey(firstMonth);
+  const firstKey = balanceMonthKey(firstMonth);
   const opening = numberOrNull(balance.investimentiInizioMese);
   const closing = numberOrNull(balance.investimentiFinali);
   const monthFlows = investmentFlows(data.movimenti, referenceKey, referenceKey);
