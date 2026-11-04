@@ -1,4 +1,4 @@
-/** Read-only bootstrap endpoint for budget-app. */
+/** Bootstrap plus explicit single-movement edits for budget-app. */
 function doPost(e) {
   try {
     const properties = PropertiesService.getScriptProperties();
@@ -8,11 +8,16 @@ function doPost(e) {
       return jsonResponse_({ ok: false, error: 'Backend configuration is incomplete.' });
     }
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (!constantTimeEqual_(String(body.secret || ''), expectedSecret) || body.action !== 'bootstrap') {
+    if (!constantTimeEqual_(String(body.secret || ''), expectedSecret)) {
       return jsonResponse_({ ok: false, error: 'Unauthorized.' });
     }
 
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    if (body.action === 'editMovement') {
+      return jsonResponse_({ ok: true, id: editMovement_(spreadsheet, body) });
+    }
+    if (body.action !== 'bootstrap') return jsonResponse_({ ok: false, error: 'Unsupported action.' });
+
     const timezone = spreadsheet.getSpreadsheetTimeZone();
     return jsonResponse_({
       ok: true,
@@ -35,6 +40,7 @@ function readTransactions_(spreadsheet, timezone) {
       const month = parts ? Number(parts[2]) - 1 : null;
       return {
         data: date,
+        id: row.__row,
         timestamp: parts ? Date.UTC(year, month, Number(parts[3])) : 0,
         anno: year,
         mese: month,
@@ -104,15 +110,53 @@ function rows_(spreadsheet, sheetName, requiredHeaders) {
   if (!requiredHeaders.every(function (header) { return headers.indexOf(header) !== -1; })) {
     throw new Error('Required columns are missing.');
   }
-  return values.slice(1).filter(function (valuesRow) {
-    return valuesRow.some(function (value) { return value !== '' && value !== null; });
-  }).map(function (valuesRow) {
+  return values.slice(1).map(function (valuesRow, index) {
+    return { values: valuesRow, rowNumber: index + 2 };
+  }).filter(function (entry) {
+    return entry.values.some(function (value) { return value !== '' && value !== null; });
+  }).map(function (entry) {
     const record = {};
     headers.forEach(function (header, index) {
-      if (header) record[header] = valuesRow[index];
+      if (header) record[header] = entry.values[index];
     });
+    record.__row = entry.rowNumber;
     return record;
   });
+}
+
+function editMovement_(spreadsheet, body) {
+  const sheet = spreadsheet.getSheetByName('Movimenti');
+  const rowNumber = Number(body.id);
+  if (!sheet || !Number.isInteger(rowNumber) || rowNumber < 2 || rowNumber > sheet.getLastRow()) {
+    throw new Error('Invalid movement row.');
+  }
+  const changes = body.changes || {};
+  const date = transactionDate_(changes.data, spreadsheet.getSpreadsheetTimeZone());
+  const amount = Number(changes.importo);
+  const description = String(changes.descrizione || '').trim();
+  const category = String(changes.categoria || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      ['Entrata', 'Uscita'].indexOf(changes.tipo) === -1 ||
+      !Number.isFinite(amount) || amount < 0 ||
+      !description || description.length > 250 ||
+      !category || category.length > 80) {
+    throw new Error('Invalid movement values.');
+  }
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    .map(function (value) { return String(value).trim(); });
+  const fields = {
+    Data: Utilities.parseDate(date, spreadsheet.getSpreadsheetTimeZone(), 'yyyy-MM-dd'),
+    Tipo: changes.tipo,
+    Descrizione: description,
+    Importo: amount,
+    Categoria: category
+  };
+  Object.keys(fields).forEach(function (header) {
+    const column = headers.indexOf(header);
+    if (column === -1) throw new Error('Movement column is missing.');
+    sheet.getRange(rowNumber, column + 1).setValue(fields[header]);
+  });
+  return rowNumber;
 }
 
 function constantTimeEqual_(left, right) {
