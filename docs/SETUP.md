@@ -1,6 +1,6 @@
 # Configurazione e uso
 
-Il backend legge i fogli già esistenti e non esegue inizializzazioni, importazioni, migrazioni o reset. Gli unici aggiornamenti al foglio sono le modifiche di un singolo movimento dopo che l'utente preme **Salva** nell'app.
+Il backend legge i fogli già esistenti e non esegue inizializzazioni, importazioni, migrazioni o reset all'avvio. Scrive solo dopo un'azione esplicita nell'app: modifica di un movimento, salvataggio del patrimonio finale o salvataggio dei budget per categoria. La scheda `BudgetCategorie` viene creata solo al primo salvataggio dei budget per categoria.
 
 ## Aggiornare Apps Script
 
@@ -14,7 +14,7 @@ Il backend legge i fogli già esistenti e non esegue inizializzazioni, importazi
 2. In **Settings → Variables and Secrets** verifica che `GAS_URL` punti all'URL `/exec` Apps Script, `ALLOWED_ORIGIN` sia `https://riz237-byte.github.io` e `API_SECRET` sia il secret già configurato.
 3. Distribuisci il Worker. Mantieni Cloudflare Access attivo solo per gli utenti autorizzati e mantieni il bypass delle richieste `OPTIONS`; il codice Worker risponde con CORS per l'origine esatta.
 
-Il Worker espone `GET /api/bootstrap` e `POST /api/movimenti/edit`. Il secondo percorso accetta soltanto data, descrizione, categoria, tipo e importo e aggiorna le celle corrispondenti nella riga indicata. Il conto non è mostrato né modificabile dall'interfaccia.
+Il Worker espone `GET /api/bootstrap`, `POST /api/movimenti/edit`, `POST /api/saldi/save` e `POST /api/budgets/categories`. I tre percorsi POST sono chiamati solo dai rispettivi pulsanti **Salva** nell'app. I saldi modificano o aggiungono la riga del mese selezionato in `SaldiMensili`; il primo saldo inserito parte da valori iniziali pari a zero. I budget per categoria usano la scheda `BudgetCategorie` con colonne `Anno`, `Mese`, `Categoria`, `Budget`. Il conto dei movimenti non è mostrato né modificabile.
 
 ## Pubblicare l'interfaccia
 
@@ -22,9 +22,10 @@ Le modifiche in `index.html`, `app.js` e `styles.css` si pubblicano con GitHub P
 
 ## Calcoli
 
-- Patrimonio e totale usano l'ultimo saldo mensile disponibile fino al mese visualizzato, usando i valori finali inseriti nel foglio.
+- Patrimonio e totale usano l'ultimo saldo mensile disponibile fino al mese visualizzato, usando i valori finali inseriti nell'app o nel foglio. Il patrimonio atteso parte dal patrimonio finale del mese precedente e aggiunge entrate meno uscite del mese.
 - I versamenti sono movimenti `Uscita` con categoria `Investimenti`; i prelievi sono `Entrata` con categoria `Investimenti`.
-- Il guadagno mensile è fine mese meno inizio mese, meno versamenti, più prelievi. Il capitale investito cumulativo parte dal valore iniziale del primo mese registrato, poi aggiunge i versamenti e sottrae i prelievi. Il guadagno totale è fine mese meno capitale investito cumulativo.
+- Il capitale investito cumulativo è la somma dei versamenti (uscite con categoria `Investimenti`) meno i prelievi (entrate con la stessa categoria). Il guadagno mensile è fine mese meno inizio mese, meno versamenti, più prelievi. Il guadagno totale è fine mese meno capitale investito cumulativo.
+- I budget per categoria si modificano nella pagina **Budget mensile**. Quando vengono salvati, si applicano da quel mese in avanti fino a una modifica successiva. La home mostra il budget, quanto è stato speso e quanto resta per ogni categoria.
 - Budget mensile e riepilogo annuale escludono i movimenti di categoria `Investimenti` dalle uscite di budget.
 
 ## Verifica manuale
@@ -32,5 +33,6 @@ Le modifiche in `index.html`, `app.js` e `styles.css` si pubblicano con GitHub P
 1. Accedi al Worker in Brave e ricarica la pagina Budget.
 2. Verifica che patrimonio, dettaglio investimenti e movimenti siano coerenti con il mese di saldo mostrato.
 3. Prova il menu **Budget mensile** e **Riepilogo annuale**.
-4. Per correggere un movimento, usa l'icona di modifica nella sua riga, controlla i campi e premi **Salva**. La riga verrà aggiornata nel foglio solo dopo questa conferma.
-
+4. Per aggiornare il patrimonio, scegli il mese, premi **Patrimonio finale**, inserisci conto, contanti e investimenti, quindi premi **Salva saldo**.
+5. Per impostare i budget, apri **Budget mensile**, compila i valori per categoria e premi **Salva budget**. La scheda `BudgetCategorie` verrà aggiunta al foglio in quel momento.
+6. Per correggere un movimento, usa l'icona di modifica nella sua riga, controlla i campi e premi **Salva**. La riga verrà aggiornata nel foglio solo dopo questa conferma.
