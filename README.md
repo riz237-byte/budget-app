@@ -1,7 +1,6 @@
 # Budget App
 
-Dashboard personale pubblicata con GitHub Pages e collegata a Google Sheets tramite Cloudflare Worker e Apps Script.
+Dashboard personale pubblicata con GitHub Pages, autenticazione email/password Supabase e database PostgreSQL Supabase. Un Worker Cloudflare collega l’interfaccia ai servizi senza esporre chiavi nel browser o nel repository.
 
-La home mostra patrimonio, budget e spese per categoria, entrate, uscite, bilancio, andamento degli investimenti e movimenti raggruppati per giorno. Il menu include **Budget mensile** e **Riepilogo annuale**. Le modifiche al foglio avvengono solo quando l'utente salva un movimento, un patrimonio finale o i budget per categoria.
+Il primo accesso consente di copiare i movimenti, i saldi e i budget dal foglio Google al progetto Supabase. Il foglio originale resta intatto come copia di sicurezza. Vedi [docs/SETUP.md](docs/SETUP.md) per la configurazione e la verifica.
 
-Il backend non esegue inizializzazioni, migrazioni, importazioni o reset. Il repository non contiene l'ID del foglio, segreti o dati finanziari. Vedi [docs/SETUP.md](docs/SETUP.md) per pubblicare gli aggiornamenti.
